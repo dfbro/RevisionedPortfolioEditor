@@ -12,6 +12,7 @@ const ITEMS = [
   ["/admin/profile", "Profile"],
   ["/admin/appearance", "Appearance & SEO"],
   ["/admin/uploads", "Assets"],
+  ["/admin/migration", "Migration tools"],
   ["/admin/repository", "Repository health"],
 ] as const;
 
@@ -21,7 +22,7 @@ export function Sidebar({ username }: { username: string }) {
   return (
     <aside className="flex flex-col gap-1 border-b border-border p-4 md:sticky md:top-0 md:h-svh md:w-56 md:border-r md:border-b-0">
       <Link href="/" className="mb-6 font-display text-lg font-semibold">
-        Claritys <span className="meta ml-1">local editor</span>
+        Portfolio <span className="meta ml-1">local editor</span>
       </Link>
       <nav className="flex gap-1 overflow-x-auto md:flex-col">
         {ITEMS.map(([href, label]) => {

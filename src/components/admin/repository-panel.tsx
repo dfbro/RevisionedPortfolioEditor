@@ -24,7 +24,11 @@ function StateLine({ label, ok, detail }: { label: string; ok: boolean; detail?:
   );
 }
 
-export function RepositoryPanel({ initial }: { initial: { root: string; remote: string; branch: string; status: string; diffStat: string; diffCheck: { ok: boolean; output: string } } }) {
+type TemplateStatus =
+  | { ok: true; root: string; branch: string; remote: string; status: string; templateName: string; templateVersion: string; contractVersion: number }
+  | { ok: false; error: string };
+
+export function RepositoryPanel({ initial, template }: { initial: { root: string; remote: string; branch: string; status: string; diffStat: string; diffCheck: { ok: boolean; output: string }; instanceName: string; templateName: string; templateContractVersion: number }; template: TemplateStatus }) {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [diff, setDiff] = useState<{ stat: string; patch: string } | null>(null);
   const [message, setMessage] = useState("content: update portfolio");
@@ -70,11 +74,34 @@ export function RepositoryPanel({ initial }: { initial: { root: string; remote: 
       <section className="grid gap-3">
         <h2 className="meta">repository identity</h2>
         <div className="rounded-md border border-border p-4 text-sm">
+          <p className="mb-2 font-medium">{initial.instanceName} <span className="meta ml-2">production</span></p>
           <p className="break-all font-mono">{initial.root}</p>
           <p className="mt-2 break-all text-xs text-muted-foreground">{initial.remote || "No origin remote"}</p>
           <p className="mt-1 text-xs text-muted-foreground">Branch: {initial.branch || "detached HEAD"}</p>
           <p className="mt-3 text-xs text-muted-foreground">This panel inspects the configured website repository, not the editor repository.</p>
         </div>
+      </section>
+
+      <section className="grid gap-3">
+        <h2 className="meta">reusable template · read only</h2>
+        {template.ok ? (
+          <div className="rounded-md border border-border p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium">{template.templateName} <span className="meta ml-2">v{template.templateVersion}</span></p>
+              <span className="meta rounded-full border border-border px-2 py-1">contract v{template.contractVersion}</span>
+            </div>
+            <StateLine
+              label="Production compatibility"
+              ok={initial.templateName === template.templateName && initial.templateContractVersion === template.contractVersion}
+              detail={`Production expects ${initial.templateName} contract v${initial.templateContractVersion}; loaded ${template.templateName} contract v${template.contractVersion}.`}
+            />
+            <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{template.root}</p>
+            <p className="mt-1 break-all text-xs text-muted-foreground">{template.remote || "No origin remote"} · branch {template.branch || "detached HEAD"}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Inspected only. Content saves, commits and pushes below target the production repository shown above.</p>
+          </div>
+        ) : (
+          <p className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">Template unavailable: {template.error}. Check PORTFOLIO_TEMPLATE_PATH.</p>
+        )}
       </section>
 
       <section className="grid gap-3">

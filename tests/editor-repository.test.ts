@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { commitRepositoryChanges, deleteRepoFile, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
+import { commitRepositoryChanges, deleteRepoFile, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, repositoryStatus, templateRepositoryStatus, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
 
 const execFile = promisify(nodeExecFile);
 
@@ -13,6 +13,7 @@ let temporaryRoot: string | undefined;
 async function makeRepo() {
   temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elaang-editor-test-"));
   await mkdir(path.join(temporaryRoot, ".git"));
+  await writeFile(path.join(temporaryRoot, "portfolio.repo.json"), JSON.stringify({ schemaVersion: 1, role: "production", instanceName: "Editor Test", templateName: "Portfolio Base", templateContractVersion: 1 }));
   vi.stubEnv("PORTFOLIO_REPO_PATH", temporaryRoot);
   return temporaryRoot;
 }
@@ -31,6 +32,46 @@ describe("repository filesystem boundary", () => {
   it("resolves the explicitly configured website repository", async () => {
     const root = await makeRepo();
     expect(await repositoryRoot()).toBe(root);
+  });
+
+  it("refuses to use a marked template as the writable production target", async () => {
+    const root = await makeRepo();
+    await writeFile(path.join(root, "portfolio.repo.json"), JSON.stringify({ schemaVersion: 1, role: "template", contractVersion: 1 }));
+    await expect(repositoryRoot()).rejects.toMatchObject({ code: "TEMPLATE_IS_READ_ONLY" });
+  });
+
+  it("requires a production manifest before opening a write target", async () => {
+    const root = await makeRepo();
+    await rm(path.join(root, "portfolio.repo.json"));
+    await expect(repositoryRoot()).rejects.toMatchObject({ code: "MISSING_REPOSITORY_MANIFEST" });
+  });
+
+  it("inspects the configured template as a separate read-only Git repository", async () => {
+    const root = await makeRepo();
+    const template = path.join(root, "template");
+    await mkdir(template);
+    await git(template, ["init", "-b", "main"]);
+    await writeFile(path.join(template, "portfolio.repo.json"), JSON.stringify({ schemaVersion: 1, role: "template", templateName: "Portfolio Base", templateVersion: "1.0.0", contractVersion: 1 }));
+    vi.stubEnv("PORTFOLIO_TEMPLATE_PATH", template);
+
+    const status = await templateRepositoryStatus();
+    expect(status).toMatchObject({ ok: true, root: template, templateName: "Portfolio Base", templateVersion: "1.0.0", contractVersion: 1, branch: "main" });
+  });
+
+  it("exposes the production template pin for a compatibility check", async () => {
+    const root = await makeRepo();
+    await git(root, ["init", "-b", "main"]);
+    await git(root, ["config", "user.name", "Editor Test"]);
+    await git(root, ["config", "user.email", "editor-test@example.test"]);
+    await git(root, ["add", "--all"]);
+    await git(root, ["commit", "-m", "initial"]);
+
+    await expect(repositoryStatus()).resolves.toMatchObject({
+      instanceName: "Editor Test",
+      templateName: "Portfolio Base",
+      templateContractVersion: 1,
+      branch: "main",
+    });
   });
 
   it("rejects parent traversal and absolute paths", async () => {
@@ -166,7 +207,7 @@ describe("repository filesystem boundary", () => {
     await git(root, ["add", "--all"]);
     await git(root, ["commit", "-m", "initial"]);
     await git(root, ["remote", "add", "origin", "https://example.test/unexpected.git"]);
-    vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/Claritys11/ElaangPortofolio");
+    vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/Claritys11/RevisionedPortfolio");
 
     await expect(pushRepositoryChanges()).rejects.toMatchObject({ code: "REMOTE_MISMATCH" });
   });

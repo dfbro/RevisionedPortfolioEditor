@@ -2,12 +2,13 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { execFile as nodeExecFile } from "node:child_process";
-import { access, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const execFile = promisify(nodeExecFile);
-const DEFAULT_REPOSITORY = path.resolve(process.cwd(), "../ElaangPortofolio");
+const DEFAULT_REPOSITORY = path.resolve(process.cwd(), "../RevisionedPortfolio");
+const DEFAULT_TEMPLATE = path.resolve(process.cwd(), "../RevisionedPortfolioTemplate");
 const MAX_ASSET_BYTES = 30 * 1024 * 1024;
 const MANAGED_ROOTS = ["content", path.join("public", "assets")];
 const ALLOWED_TYPES = new Set([
@@ -21,6 +22,46 @@ export class RepositoryError extends Error {
     super(message);
     this.name = "RepositoryError";
   }
+}
+
+type ProductionManifest = {
+  schemaVersion: 1;
+  role: "production";
+  instanceName: string;
+  templateName: string;
+  templateContractVersion: number;
+};
+
+type RepositoryManifestInput = {
+  schemaVersion?: number;
+  role?: string;
+  instanceName?: string;
+  templateName?: string;
+  templateContractVersion?: number;
+};
+
+async function readProductionManifest(root: string): Promise<ProductionManifest> {
+  let manifest: RepositoryManifestInput;
+  try {
+    manifest = JSON.parse(await readFile(path.join(root, "portfolio.repo.json"), "utf8")) as Partial<ProductionManifest>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new RepositoryError("The configured write target has no portfolio.repo.json manifest. Mark it explicitly as role=production before using the editor.", "MISSING_REPOSITORY_MANIFEST");
+    }
+    throw new RepositoryError("The configured production repository manifest is invalid JSON.", "INVALID_REPOSITORY_MANIFEST");
+  }
+  if (manifest.role === "template") {
+      throw new RepositoryError("The editor's write target is read-only by design. Set PORTFOLIO_REPO_PATH to a production instance, not RevisionedPortfolioTemplate.", "TEMPLATE_IS_READ_ONLY");
+  }
+  if (
+    manifest.schemaVersion !== 1 || manifest.role !== "production" ||
+    typeof manifest.instanceName !== "string" || !manifest.instanceName.trim() ||
+    typeof manifest.templateName !== "string" || !manifest.templateName.trim() ||
+    typeof manifest.templateContractVersion !== "number" || !Number.isInteger(manifest.templateContractVersion)
+  ) {
+    throw new RepositoryError("The configured repository must have a valid production manifest with a template contract version.", "INVALID_REPOSITORY_MANIFEST");
+  }
+  return manifest as ProductionManifest;
 }
 
 export async function repositoryRoot(): Promise<string> {
@@ -39,7 +80,37 @@ export async function repositoryRoot(): Promise<string> {
   } catch {
     throw new RepositoryError("Configured portfolio path is not a Git repository.", "NOT_A_GIT_REPOSITORY");
   }
+  await readProductionManifest(root);
   return root;
+}
+
+/** Read-only inspection of the reusable base; it is never used as a content write target. */
+export async function templateRepositoryStatus() {
+  try {
+    const configured = process.env.PORTFOLIO_TEMPLATE_PATH?.trim() || DEFAULT_TEMPLATE;
+    const root = await realpath(/* turbopackIgnore: true */ configured);
+    const stat = await lstat(root);
+    if (!stat.isDirectory()) throw new RepositoryError("Configured template path is not a directory.", "INVALID_TEMPLATE_ROOT");
+    await access(path.join(root, ".git"));
+    const manifest = JSON.parse(await readFile(path.join(root, "portfolio.repo.json"), "utf8")) as {
+      schemaVersion?: number;
+      role?: string;
+      templateName?: string;
+      templateVersion?: string;
+      contractVersion?: number;
+    };
+    if (manifest.schemaVersion !== 1 || manifest.role !== "template" || typeof manifest.contractVersion !== "number" || !Number.isInteger(manifest.contractVersion)) {
+      throw new RepositoryError("The configured template is missing a supported portfolio.repo.json manifest.", "INVALID_TEMPLATE_MANIFEST");
+    }
+    const [branch, remote, status] = await Promise.all([
+      execFile("git", ["branch", "--show-current"], { cwd: root, timeout: 10_000, windowsHide: true }).then((r) => r.stdout.trim()),
+      execFile("git", ["remote", "get-url", "origin"], { cwd: root, timeout: 10_000, windowsHide: true }).then((r) => r.stdout.trim()).catch(() => ""),
+      execFile("git", ["status", "--short", "--branch"], { cwd: root, timeout: 10_000, windowsHide: true }).then((r) => r.stdout.trim()),
+    ]);
+    return { ok: true as const, root, branch, remote, status, templateName: manifest.templateName ?? "Portfolio template", templateVersion: manifest.templateVersion ?? "unknown", contractVersion: manifest.contractVersion };
+  } catch (error) {
+    return { ok: false as const, error: (error as Error).message || "Template repository is unavailable." };
+  }
 }
 
 export async function repoPath(relative: string): Promise<string> {
@@ -297,6 +368,7 @@ export async function repositoryStatus() {
     git(["diff", "--stat"]),
     git(["diff", "--check"]).then(() => ({ ok: true, output: "" })).catch((e: Error) => ({ ok: false, output: e.message })),
   ]);
+  const manifest = await readProductionManifest(root);
   return {
     root,
     expectedRoot: await repositoryRoot(),
@@ -306,6 +378,9 @@ export async function repositoryStatus() {
     status,
     diffStat,
     diffCheck,
+    instanceName: manifest.instanceName,
+    templateName: manifest.templateName,
+    templateContractVersion: manifest.templateContractVersion,
   };
 }
 
@@ -332,7 +407,7 @@ export async function repositoryHealth() {
   } catch (error) {
     remoteConnectivity = { ok: false, output: (error as Error).message };
   }
-  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/ElaangPortofolio";
+  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/RevisionedPortfolio";
   let staticOutput: { ok: boolean; output: string };
   try {
     const root = await repositoryRoot();
@@ -419,7 +494,7 @@ export async function pushRepositoryChanges() {
     git(["remote", "get-url", "origin"]),
     git(["branch", "--show-current"]),
   ]);
-  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/ElaangPortofolio";
+  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/RevisionedPortfolio";
   const normalizeRemote = (value: string) => value.replace(/\.git$/, "").replace(/\/$/, "").toLowerCase();
   if (normalizeRemote(remote) !== normalizeRemote(expectedRemote)) {
     throw new RepositoryError("Push blocked: origin does not match the configured portfolio repository.", "REMOTE_MISMATCH");

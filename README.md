@@ -1,40 +1,56 @@
-# ElaangPortfolioEditor
+# RevisionedPortfolioEditor
 
-A local-only editor for the sibling ElaangPortofolio website repository.
+A local-only CMS for the maintained static portfolio repository. The editor keeps no editorial database: the configured production Git repository is the content source of truth.
 
 ## Run
 
-    pnpm install
-    pnpm dev
+```sh
+pnpm install
+pnpm dev
+```
 
-The app binds to 127.0.0.1:4317. Keep it local; do not expose through LAN, tunnel or public reverse proxy.
+The app binds to `127.0.0.1:4317`. Do not expose it through LAN, a tunnel or a public reverse proxy.
 
-## Architecture
+## Three-repository model
 
-This is a local Next.js App Router application so it can reuse the old admin UI, forms, fonts, global CSS, Tiptap editor and Shadcn/Radix components at high visual fidelity.
+| Repository | Role | Editor access |
+| --- | --- | --- |
+| `RevisionedPortfolioEditor` | Local CMS, forms, import adapters and Git actions | Application |
+| `RevisionedPortfolioTemplate` | Reusable static site source and versioned content contract | Read-only compatibility check |
+| `RevisionedPortfolio` | Existing maintained production instance, its content/assets and deployment workflow | Read/write; only commit/push target |
 
-It reads MD/JSON content from the configured website repository, builds view models in memory and writes changes directly to files. It has no editorial database. The default target is ../ElaangPortofolio; PORTFOLIO_REPO_PATH can override it in local environment.
+The editor defaults to sibling `../RevisionedPortfolio` for production and `../RevisionedPortfolioTemplate` for the template. Configure overrides in a local `.env.local`:
 
-The editor UI includes:
-- dashboard and current repository status;
-- writeup CRUD with draft/published status, Tiptap and import tools;
-- project CRUD;
-- achievement CRUD and reorder;
-- profile and SEO editor;
-- domain and light/dark color palette editor;
-- public assets manager;
-- repository status, diff, Git object/content/remote health diagnostics;
-- explicit commit and push.
+- `PORTFOLIO_REPO_PATH`: the only repository the editor may write, commit and push.
+- `PORTFOLIO_TEMPLATE_PATH`: template repository path, inspected read-only.
+
+A template manifest with `role: template` is rejected as a write target. Do not point both environment variables to the same checkout.
+
+## Features
+
+- Writeup CRUD with Markdown/frontmatter, import tools and draft/published state.
+- Project and achievement CRUD.
+- Profile, SEO and appearance editor.
+- Public asset manager.
+- Production Git status, managed-path diff, validation, explicit commit and guarded push.
+- Template identity and content contract compatibility check.
+- Migration Tools workbench with the legacy schema map and future adapter pipeline.
+
+## Legacy migration
+
+See [docs/migration-adapters.md](docs/migration-adapters.md). The old backend used Prisma/PostgreSQL. Database exports are the preferred source for a complete migration; public endpoint scraping is only a lower-fidelity fallback. The Migration Tools panel is currently a read-only architecture/workflow scaffold: no importer writes production data yet.
 
 ## Safety
 
 - API mutation endpoints require the local Host and matching Origin.
 - The server binds to loopback only.
 - Repository path traversal and symlink escape are rejected.
+- A marked template repository cannot be configured as the write target.
 - Asset files are checked by size, extension, MIME and signature.
 - Content saves use SHA-256 optimistic concurrency; stale files are rejected.
 - Commit runs content validation and Git diff checks first.
-- Diagnostics are read-only. No git reset/clean/rebase or auto-repair.
-- Commit stages only content/ and public/assets/.
+- Commit stages only `content/` and `public/assets/`.
+- Push verifies `origin` against `EXPECTED_PORTFOLIO_REMOTE`.
+- Diagnostics never reset, clean, rebase or repair Git state.
 
-The website repository is the only source of content truth. Do not add a database as a second content store.
+The production repository remains the only source of content truth. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.
