@@ -1,0 +1,155 @@
+import { achievementWeight } from "@/lib/achievements";
+import { normalizeMediaUrl, parseObjectArray, parseRecord, parseStringArray } from "@/lib/json";
+import type { AchievementItem, Attachment, EducationItem, JourneyItem, Profile, ProjectItem, Skill, WriteupDetail, WriteupSummary } from "@/lib/types";
+
+// Structural legacy row types keep the migration helpers independent from Prisma.
+type Writeup = {
+  id: string; slug: string | null; title: string | null; competition: string | null; category: string | null;
+  difficulty: string | null; date: Date | null; summary: string | null; content: string | null; flag?: string | null;
+  tagsJson: unknown; attachmentsJson?: unknown; createdAt: Date; updatedAt: Date;
+};
+type Project = { id: string; title: string | null; description: string | null; imageUrl: string | null; projectUrl: string | null; category: string | null; tagsJson: unknown };
+type Achievement = { id: string; title: string | null; issuer: string | null; platform: string | null; description: string | null; imageUrl: string | null; date: Date | null; proofScore: number | null; documentUrl: string | null };
+type ProfileSettings = {
+  displayName: string | null; alias: string | null; navbarBrandMode: string; navbarBrandName: string | null;
+  email: string | null; websiteUrl: string | null; githubUrl: string | null; instagramUrl: string | null;
+  profileImageUrl: string | null; aboutText: string | null; philosophyText: string | null;
+  technicalArsenalJson: unknown; professionalJourneyJson: unknown; educationHistoryJson: unknown; seoSettingsJson: unknown;
+};
+
+const KNOWN_CATEGORIES = ["Pwn", "Reverse", "Forensics", "Crypto", "Web", "Misc", "OSINT"];
+
+export function normalizeCategory(c: string | null): string {
+  const v = (c ?? "").trim();
+  if (!v) return "Misc";
+  const hit = KNOWN_CATEGORIES.find((k) => k.toLowerCase() === v.toLowerCase());
+  return hit ?? v;
+}
+
+export function firstImageSrc(html: string): string | null {
+  const m = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/i.exec(html);
+  return m ? m[1] : null;
+}
+
+const iso = (d: Date | null) => (d ? d.toISOString() : null);
+
+export function toWriteupSummary(row: Writeup): WriteupSummary {
+  const content = row.content ?? "";
+  return {
+    id: row.id,
+    slug: row.slug,
+    href: `/writeups/${encodeURIComponent(row.slug || row.id)}`,
+    title: row.title?.trim() || "Untitled",
+    competition: row.competition?.trim() ?? "",
+    category: normalizeCategory(row.category),
+    difficulty: row.difficulty?.trim() || null,
+    date: iso(row.date),
+    updated: row.updatedAt.toISOString(),
+    summary: row.summary?.trim() ?? "",
+    tags: parseStringArray(row.tagsJson),
+    cover: firstImageSrc(content),
+  };
+}
+
+export function toWriteupDetail(row: Writeup): WriteupDetail {
+  const attachments = parseObjectArray<Attachment>(row.attachmentsJson, (x) =>
+    typeof x.url === "string"
+      ? {
+          url: x.url,
+          name: typeof x.name === "string" ? x.name : (x.url.split("/").pop() ?? "file"),
+          contentType: typeof x.contentType === "string" ? x.contentType : "application/octet-stream",
+        }
+      : null,
+  );
+  return { ...toWriteupSummary(row), content: row.content ?? "", flag: row.flag?.trim() || null, attachments };
+}
+
+export function toProject(row: Project): ProjectItem {
+  return {
+    id: row.id,
+    title: row.title?.trim() || "Untitled project",
+    description: row.description?.trim() ?? "",
+    imageUrl: normalizeMediaUrl(row.imageUrl),
+    projectUrl: row.projectUrl?.trim() || null,
+    category: row.category?.trim() || "Project",
+    tags: parseStringArray(row.tagsJson),
+  };
+}
+
+export function toAchievement(row: Achievement): AchievementItem {
+  return {
+    id: row.id,
+    title: row.title?.trim() || "Untitled",
+    issuer: row.issuer?.trim() || null,
+    platform: row.platform?.trim() || null,
+    description: row.description?.trim() ?? "",
+    imageUrl: normalizeMediaUrl(row.imageUrl),
+    date: iso(row.date),
+    year: row.date ? row.date.getUTCFullYear() : null,
+    proofScore: row.proofScore ?? null,
+    documentUrl: normalizeMediaUrl(row.documentUrl),
+    weight: achievementWeight({ title: row.title?.trim() || "", proofScore: row.proofScore ?? null }),
+  };
+}
+
+const PWN = /pwn|binary exploitation/i;
+
+export function sortSkillsPwnFirst(skills: Skill[]): Skill[] {
+  return [...skills].sort((a, b) => Number(PWN.test(b.name)) - Number(PWN.test(a.name)) || b.level - a.level);
+}
+
+const DEFAULT_PROFILE: Profile = {
+  displayName: "Elang Dimas Syadewa",
+  alias: "Claritys",
+  brand: "Claritys",
+  email: null,
+  websiteUrl: "https://claritys.web.id",
+  githubUrl: "https://github.com/Claritys11",
+  instagramUrl: null,
+  profileImageUrl: "/profile.jpg",
+  aboutText: "",
+  philosophyText: "",
+  skills: [{ name: "Binary Exploitation", level: 70 }],
+  journey: [],
+  education: [],
+  seo: { keywords: [], sameAs: [] },
+};
+
+export function toProfile(row: ProfileSettings | null): Profile {
+  if (!row) return DEFAULT_PROFILE;
+  const seo = parseRecord(row.seoSettingsJson);
+  const alias = row.alias?.trim() || DEFAULT_PROFILE.alias;
+  return {
+    displayName: row.displayName?.trim() || DEFAULT_PROFILE.displayName,
+    alias,
+    brand: row.navbarBrandMode === "custom" && row.navbarBrandName?.trim() ? row.navbarBrandName.trim() : alias,
+    email: row.email?.trim() || null,
+    websiteUrl: row.websiteUrl?.trim() || null,
+    githubUrl: row.githubUrl?.trim() || null,
+    instagramUrl: row.instagramUrl?.trim() || null,
+    profileImageUrl: normalizeMediaUrl(row.profileImageUrl) ?? DEFAULT_PROFILE.profileImageUrl,
+    aboutText: row.aboutText?.trim() ?? "",
+    philosophyText: row.philosophyText?.trim() ?? "",
+    skills: sortSkillsPwnFirst(
+      parseObjectArray<Skill>(row.technicalArsenalJson, (x) =>
+        typeof x.name === "string" ? { name: x.name, level: typeof x.level === "number" ? Math.max(0, Math.min(100, x.level)) : 0 } : null,
+      ),
+    ),
+    journey: parseObjectArray<JourneyItem>(row.professionalJourneyJson, (x) =>
+      typeof x.role === "string" ? { role: x.role, company: String(x.company ?? ""), period: String(x.period ?? ""), desc: String(x.desc ?? "") } : null,
+    ),
+    education: parseObjectArray<EducationItem>(row.educationHistoryJson, (x) =>
+      typeof x.school === "string" ? { school: x.school, level: String(x.level ?? ""), period: String(x.period ?? "") } : null,
+    ),
+    seo: {
+      jobTitle: typeof seo.jobTitle === "string" ? seo.jobTitle : undefined,
+      locale: typeof seo.locale === "string" ? seo.locale : undefined,
+      description: typeof seo.description === "string" ? seo.description : undefined,
+      siteName: typeof seo.siteName === "string" && seo.siteName.trim() ? seo.siteName : undefined,
+      defaultTitle: typeof seo.defaultTitle === "string" && seo.defaultTitle.trim() ? seo.defaultTitle : undefined,
+      titleTemplate: typeof seo.titleTemplate === "string" && seo.titleTemplate.includes("%s") ? seo.titleTemplate : undefined,
+      keywords: parseStringArray(seo.keywords),
+      sameAs: parseStringArray(seo.sameAs),
+    },
+  };
+}
