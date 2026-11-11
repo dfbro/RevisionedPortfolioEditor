@@ -2,6 +2,8 @@
 
 This editor writes only the configured production repository. Migration adapters must normalize their source into the file contract before any production write.
 
+For the current migration procedure and implementation status, see the [Migration runbook](migration-runbook.md).
+
 ## Reverse-engineered legacy source
 
 The archived application used Prisma with PostgreSQL. Its schema is retained under the workspace-level `legacy-archive/website-runtime-2026-11-09/prisma/schema.prisma`.

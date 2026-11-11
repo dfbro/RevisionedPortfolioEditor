@@ -207,7 +207,7 @@ describe("repository filesystem boundary", () => {
     await git(root, ["add", "--all"]);
     await git(root, ["commit", "-m", "initial"]);
     await git(root, ["remote", "add", "origin", "https://example.test/unexpected.git"]);
-    vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/Claritys11/RevisionedPortfolio");
+    vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/dfbro/RevisionedPortfolio");
 
     await expect(pushRepositoryChanges()).rejects.toMatchObject({ code: "REMOTE_MISMATCH" });
   });

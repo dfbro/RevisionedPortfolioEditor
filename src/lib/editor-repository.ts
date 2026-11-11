@@ -407,7 +407,7 @@ export async function repositoryHealth() {
   } catch (error) {
     remoteConnectivity = { ok: false, output: (error as Error).message };
   }
-  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/RevisionedPortfolio";
+  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/dfbro/RevisionedPortfolio";
   let staticOutput: { ok: boolean; output: string };
   try {
     const root = await repositoryRoot();
@@ -494,7 +494,7 @@ export async function pushRepositoryChanges() {
     git(["remote", "get-url", "origin"]),
     git(["branch", "--show-current"]),
   ]);
-  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/Claritys11/RevisionedPortfolio";
+  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/dfbro/RevisionedPortfolio";
   const normalizeRemote = (value: string) => value.replace(/\.git$/, "").replace(/\/$/, "").toLowerCase();
   if (normalizeRemote(remote) !== normalizeRemote(expectedRemote)) {
     throw new RepositoryError("Push blocked: origin does not match the configured portfolio repository.", "REMOTE_MISMATCH");

@@ -11,18 +11,22 @@ pnpm dev
 
 The app binds to `127.0.0.1:4317`. Do not expose it through LAN, a tunnel or a public reverse proxy.
 
-## Three-repository model
+Start with [docs/editor-guide.md](docs/editor-guide.md) for the CRUD workflow and [docs/git-and-publish.md](docs/git-and-publish.md) for review, Commit, Push and deployment verification.
+
+## Four-repository model
 
 | Repository | Role | Editor access |
 | --- | --- | --- |
-| `RevisionedPortfolioEditor` | Local CMS, forms, import adapters and Git actions | Application |
+| `RevisionedPortfolioEditor` | Local CMS, forms, import adapters and Git actions | Application source; loopback-only runtime |
 | `RevisionedPortfolioTemplate` | Reusable static site source and versioned content contract | Read-only compatibility check |
-| `RevisionedPortfolio` | Existing maintained production instance, its content/assets and deployment workflow | Read/write; only commit/push target |
+| `RevisionedPortfolio` | Maintained production instance, content/assets, validation/build and cross-repo publication workflow | Read/write; only editor commit/push target |
+| `RevisionedPortfolioSite` | Generated static website files only; GitHub Pages branch source | No editor access; publication workflow only |
 
 The editor defaults to sibling `../RevisionedPortfolio` for production and `../RevisionedPortfolioTemplate` for the template. Configure overrides in a local `.env.local`:
 
 - `PORTFOLIO_REPO_PATH`: the only repository the editor may write, commit and push.
 - `PORTFOLIO_TEMPLATE_PATH`: template repository path, inspected read-only.
+- `EXPECTED_PORTFOLIO_REMOTE`: exact production `origin` URL accepted by the Push guard; defaults to `https://github.com/dfbro/RevisionedPortfolio`.
 
 A template manifest with `role: template` is rejected as a write target. Do not point both environment variables to the same checkout.
 
@@ -38,7 +42,7 @@ A template manifest with `role: template` is rejected as a write target. Do not 
 
 ## Legacy migration
 
-See [docs/migration-adapters.md](docs/migration-adapters.md). The old backend used Prisma/PostgreSQL. Database exports are the preferred source for a complete migration; public endpoint scraping is only a lower-fidelity fallback. The Migration Tools panel is currently a read-only architecture/workflow scaffold: no importer writes production data yet.
+See [docs/migration-runbook.md](docs/migration-runbook.md) and [docs/migration-adapters.md](docs/migration-adapters.md). The old backend used Prisma/PostgreSQL. Database exports are the preferred source for a complete migration; public endpoint scraping is only a lower-fidelity fallback. The Migration Tools panel is currently a read-only architecture/workflow scaffold: no importer writes production data yet.
 
 ## Safety
 
@@ -53,4 +57,12 @@ See [docs/migration-adapters.md](docs/migration-adapters.md). The old backend us
 - Push verifies `origin` against `EXPECTED_PORTFOLIO_REMOTE`.
 - Diagnostics never reset, clean, rebase or repair Git state.
 
-The production repository remains the only source of content truth. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.
+The source production repository remains the only source of content truth. `RevisionedPortfolioSite` is derived output, not a second content system. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.
+
+## Documentation
+
+- [Editor guide: CRUD, profile, appearance and assets](docs/editor-guide.md)
+- [Git and publishing: diff, Commit, Push and GitHub Actions](docs/git-and-publish.md)
+- [Migration runbook](docs/migration-runbook.md)
+- [Legacy schema and adapter mapping](docs/migration-adapters.md)
+- [Workspace operations](../docs/WORKSPACE-GUIDE.md)
