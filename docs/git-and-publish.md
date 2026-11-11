@@ -100,7 +100,7 @@ gh run watch <run-id> --repo dfbro/RevisionedPortfolio
 
 Both `build` and `publish` must succeed. The published site is [https://dfbro.github.io/RevisionedPortfolioSite/](https://dfbro.github.io/RevisionedPortfolioSite/). Verify the homepage, one nested writeup, one image and sitemap.
 
-The source repository uses Actions variable `STATIC_SITE_REPOSITORY=dfbro/RevisionedPortfolioSite`, `STATIC_SITE_BRANCH=main`, optional `STATIC_SITE_MAX_SIZE_MB=900`, and secret `STATIC_SITE_DEPLOY_TOKEN`. The secret must be a fine-grained PAT restricted to the static repository with Contents read/write; see the [source deployment guide](../../RevisionedPortfolio/docs/github-pages.md). Do not substitute the source repository's `GITHUB_TOKEN` because branch-based GitHub Pages does not build from commits pushed with that token.
+The source repository uses Actions variables `STATIC_SITE_REPOSITORY=dfbro/RevisionedPortfolioSite` and `STATIC_SITE_BRANCH=main`, plus secret `STATIC_SITE_DEPLOY_TOKEN`. The secret must be a fine-grained PAT restricted to the static repository with Contents read/write; see the [source deployment guide](../../RevisionedPortfolio/docs/github-pages.md). Do not substitute the source repository's `GITHUB_TOKEN` because branch-based GitHub Pages does not build from commits pushed with that token.
 
 ## 8. Common failures
 
