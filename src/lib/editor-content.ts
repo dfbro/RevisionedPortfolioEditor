@@ -63,8 +63,10 @@ export type EditorProfile = {
 };
 
 export type EditorSite = {
-  schemaVersion: number;
+  schemaVersion: 2;
   url: string;
+  basePath: string;
+  outputDirectory: "dist";
   title: string;
   description: string;
   language: string;

@@ -13,14 +13,13 @@ The app binds to `127.0.0.1:4317`. Do not expose it through LAN, a tunnel or a p
 
 Start with [docs/editor-guide.md](docs/editor-guide.md) for the CRUD workflow and [docs/git-and-publish.md](docs/git-and-publish.md) for review, Commit, Push and deployment verification.
 
-## Four-repository model
+## Three-repository model
 
 | Repository | Role | Editor access |
 | --- | --- | --- |
 | `RevisionedPortfolioEditor` | Local CMS, forms, import adapters and Git actions | Application source; loopback-only runtime |
 | `RevisionedPortfolioTemplate` | Reusable static site source and versioned content contract | Read-only compatibility check |
-| `RevisionedPortfolio` | Maintained production instance, content/assets, validation/build and cross-repo publication workflow | Read/write; only editor commit/push target |
-| `RevisionedPortfolioSite` | Generated static website files only; GitHub Pages branch source | No editor access; publication workflow only |
+| `RevisionedPortfolio` | Production website source, content/assets, static build, and GitHub Pages deployment | Read/write; only editor commit/push target |
 
 The editor defaults to sibling `../RevisionedPortfolio` for production and `../RevisionedPortfolioTemplate` for the template. Configure overrides in a local `.env.local`:
 
@@ -35,6 +34,8 @@ A template manifest with `role: template` is rejected as a write target. Do not 
 - Writeup CRUD with Markdown/frontmatter, import tools and draft/published state.
 - Project and achievement CRUD.
 - Profile, SEO and appearance editor.
+- Central site deployment settings: canonical origin, base path (`/` by default), fixed static output `dist`, trailing-slash policy, and metadata.
+- Explicit GitHub Pages custom-domain synchronization with a browser confirmation; existing workflow publishing mode/source are preserved.
 - Public asset manager.
 - Production Git status, managed-path diff, validation, explicit commit and guarded push.
 - Template identity and content contract compatibility check.
@@ -57,7 +58,7 @@ See [docs/migration-runbook.md](docs/migration-runbook.md) and [docs/migration-a
 - Push verifies `origin` against `EXPECTED_PORTFOLIO_REMOTE`.
 - Diagnostics never reset, clean, rebase or repair Git state.
 
-The source production repository remains the only source of content truth. `RevisionedPortfolioSite` is derived output, not a second content system. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.
+The source production repository remains the only source of content truth. The public static site is built from that repository's `dist/` artifact; there is no separate active `RevisionedPortfolioSite` Git repository. The editor's GitHub Pages action changes only the repository custom-domain setting. DNS records and TLS activation are separate infrastructure operations. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.
 
 ## Documentation
 
