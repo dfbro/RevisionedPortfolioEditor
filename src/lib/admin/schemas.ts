@@ -139,6 +139,16 @@ export const ProfileSchema = z.object({
     blankToNull,
     z.string().trim().max(39).regex(/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/, "Enter a valid GitHub username (up to 39 characters).").nullable(),
   ),
+  heroNameLines: z.preprocess(
+    (value) => {
+      if (typeof value === "string") {
+        const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        return lines.length ? lines : null;
+      }
+      return blankToNull(value);
+    },
+    z.array(z.string().trim().min(1).max(80)).min(1).max(6).nullable(),
+  ),
   instagramUrl: linkUrl,
   profileImageUrl: mediaUrl,
   aboutText: optText(5000),
@@ -160,6 +170,17 @@ export const ProfileSchema = z.object({
     }),
     {},
   ),
+}).superRefine((profile, ctx) => {
+  if (profile.heroNameLines) {
+    if (!profile.displayName) {
+      ctx.addIssue({ code: "custom", path: ["heroNameLines"], message: "Set a display name before configuring its line groups." });
+      return;
+    }
+    const normalized = (value: string) => value.trim().split(/\s+/).filter(Boolean).join(" ").toLocaleLowerCase("en");
+    if (normalized(profile.heroNameLines.join(" ")) !== normalized(profile.displayName)) {
+      ctx.addIssue({ code: "custom", path: ["heroNameLines"], message: "Hero name lines must contain the full display name in its original word order." });
+    }
+  }
 });
 
 export const OrderSchema = z.object({

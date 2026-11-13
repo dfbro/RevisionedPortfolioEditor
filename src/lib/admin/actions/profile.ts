@@ -20,6 +20,7 @@ export async function saveProfile(_prev: ActionState, fd: FormData): Promise<Act
     websiteUrl: data.websiteUrl,
     githubUrl: data.githubUrl,
     githubActivityUsername: data.githubActivityUsername,
+    heroNameLines: data.heroNameLines,
     instagramUrl: data.instagramUrl,
     profileImageUrl: data.profileImageUrl ?? "/profile.jpg",
     aboutText: data.aboutText ?? "",

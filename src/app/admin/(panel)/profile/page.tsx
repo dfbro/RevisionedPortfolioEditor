@@ -17,6 +17,7 @@ export default async function ProfilePage() {
         websiteUrl: r.websiteUrl ?? "",
         githubUrl: r.githubUrl ?? "",
         githubActivityUsername: r.githubActivityUsername ?? "",
+        heroNameLines: r.heroNameLines?.join("\n") ?? [r.displayName.trim().split(/\s+/)[0], r.displayName.trim().split(/\s+/).slice(1).join(" ")].filter(Boolean).join("\n"),
         instagramUrl: r.instagramUrl ?? "",
         profileImageUrl: r.profileImageUrl,
         aboutText: r.aboutText,

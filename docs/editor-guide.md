@@ -65,7 +65,7 @@ To delete, use the row's Delete action and confirm. Deleting an article does not
 
 ## 5. Profile and appearance
 
-**Profile** edits display name, alias/brand, email, website/social links, profile image, biography, quote, skills, journey, education and SEO metadata. The separate **GitHub activity username** controls which public account the static build uses for the contribution heatmap; when left blank, the build derives the login from the GitHub profile URL. Array editors preserve the order shown.
+**Profile** edits display name, alias/brand, email, website/social links, profile image, biography, quote, skills, journey, education and SEO metadata. **Hero name line groups** controls the homepage name layout: enter one visual line per row, keeping the complete display name in its original word order (for example, `Elang` / `Dimas Syadewa`, or three lines `Elang` / `Dimas` / `Syadewa`). The separate **GitHub activity username** controls which public account the static build uses for the contribution heatmap; when left blank, the build derives the login from the GitHub profile URL. Array editors preserve the order shown.
 
 **Appearance & SEO** edits the canonical site URL, language, title/description, trailing-slash setting, default theme, typography, radius and light/dark color tokens.
 
