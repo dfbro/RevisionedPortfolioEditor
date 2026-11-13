@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { editorAssetPreviewUrl } from "@/components/admin/image-field";
 
 /** Certificate image or PDF. A PDF keeps the original (documentUrl) and shows its rendered page 1. */
 export function CertificateField({ defaultImage, defaultDocument }: { defaultImage?: string | null; defaultDocument?: string | null }) {
@@ -35,14 +36,14 @@ export function CertificateField({ defaultImage, defaultDocument }: { defaultIma
     <div className="grid gap-3">
       {image && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" className="max-h-48 w-fit rounded border border-border object-contain" />
+        <img src={editorAssetPreviewUrl(image)} alt="" className="max-h-48 w-fit rounded border border-border object-contain" />
       )}
       <div className="flex gap-2">
         <Input
           id="imageUrl"
           name={embedded ? undefined : "imageUrl"}
           value={embedded ? "" : image}
-          placeholder={embedded ? "(embedded image — upload to replace)" : "/api/public/uploads/… or https://…"}
+          placeholder={embedded ? "(embedded image — upload to replace)" : "Public website asset URL or https://…"}
           onChange={(e) => setImage(e.target.value)}
         />
         {embedded && <input type="hidden" name="imageUrl" value={image} />}
@@ -65,7 +66,7 @@ export function CertificateField({ defaultImage, defaultDocument }: { defaultIma
       {doc && (
         <div className="flex items-center gap-3 text-sm">
           <FileText className="h-4 w-4 text-primary" />
-          <a href={doc} target="_blank" rel="noreferrer" className="truncate underline underline-offset-4">
+          <a href={editorAssetPreviewUrl(doc)} target="_blank" rel="noreferrer" className="truncate underline underline-offset-4">
             Original PDF
           </a>
           <Button type="button" variant="ghost" size="sm" onClick={() => setDoc("")}>

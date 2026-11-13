@@ -16,6 +16,7 @@ export default async function ProfilePage() {
         email: r.email ?? "",
         websiteUrl: r.websiteUrl ?? "",
         githubUrl: r.githubUrl ?? "",
+        githubActivityUsername: r.githubActivityUsername ?? "",
         instagramUrl: r.instagramUrl ?? "",
         profileImageUrl: r.profileImageUrl,
         aboutText: r.aboutText,

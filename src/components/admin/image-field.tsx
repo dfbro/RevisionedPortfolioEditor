@@ -5,6 +5,23 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+/** Preview an uncommitted website asset through the local editor backend. */
+export function editorAssetPreviewUrl(value: string): string {
+  try {
+    const pathname = new URL(value, "http://127.0.0.1:4317").pathname;
+    const marker = "/assets/uploads/";
+    const index = pathname.lastIndexOf(marker);
+    if (index < 0) return value;
+    const encodedName = pathname.slice(index + marker.length);
+    if (!encodedName || encodedName.includes("/")) return value;
+    const name = decodeURIComponent(encodedName);
+    if (!name || name === "." || name === ".." || /[\\/\0]/.test(name)) return value;
+    return "/api/admin/upload/" + encodeURIComponent(name);
+  } catch {
+    return value;
+  }
+}
+
 export async function uploadFile(file: File): Promise<{ url: string; name: string; contentType: string }> {
   const fd = new FormData();
   fd.append("file", file);
@@ -22,14 +39,14 @@ export function ImageField({ name, defaultValue }: { name: string; defaultValue?
     <div className="grid gap-3">
       {value && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={value} alt="" className="max-h-48 w-fit rounded border border-border object-contain" />
+        <img src={editorAssetPreviewUrl(value)} alt="" className="max-h-48 w-fit rounded border border-border object-contain" />
       )}
       <div className="flex gap-2">
         <Input
           id={name}
           name={embedded ? undefined : name}
           value={embedded ? "" : value}
-          placeholder={embedded ? "(embedded image — upload or paste a URL to replace)" : "/api/public/uploads/… or https://…"}
+          placeholder={embedded ? "(embedded image — upload or paste a URL to replace)" : "Public website asset URL or https://…"}
           onChange={(e) => setValue(e.target.value)}
         />
         {/* Legacy data: images travel in a hidden field so a save without changes keeps them. */}
