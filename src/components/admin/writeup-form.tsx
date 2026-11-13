@@ -9,6 +9,7 @@ import { RichEditor } from "@/components/admin/rich-editor";
 import { TagInput } from "@/components/admin/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { saveWriteup } from "@/lib/admin/actions/writeups";
 import { normalizeCategory } from "@/lib/data/mappers";
@@ -43,7 +44,7 @@ export function WriteupForm({ initial = {}, tagIndex = [] }: { initial?: Writeup
   const [difficulty, setDifficulty] = useState(initial.difficulty ?? "");
   const [date, setDate] = useState(initial.date ?? "");
   const [flag, setFlag] = useState(initial.flag ?? "");
-  const [status, setStatus] = useState<string>(initial.status ?? "draft");
+  const [status, setStatus] = useState<"draft" | "published">(initial.status ?? "draft");
   const [uploading, setUploading] = useState(false);
   const [tags, setTags] = useState({ list: initial.tags ?? [], key: 0 });
   const [imported, setImported] = useState<{ html: string; nonce: number }>();
@@ -101,11 +102,16 @@ export function WriteupForm({ initial = {}, tagIndex = [] }: { initial?: Writeup
         <Textarea id="summary" name="summary" rows={2} value={summary} onChange={(e) => setSummary(e.target.value)} />
       </Field>
       <Field label="Publication status" name="status" hint="Published articles are included in the next static website build." error={f.status}>
-        <Input id="status" name="status" list="publication-statuses" value={status} onChange={(e) => setStatus(e.target.value)} />
-        <datalist id="publication-statuses">
-          <option value="draft" />
-          <option value="published" />
-        </datalist>
+        <input type="hidden" name="status" value={status} />
+        <Select value={status} onValueChange={(value) => setStatus(value as "draft" | "published")}>
+          <SelectTrigger id="status" aria-label="Publication status">
+            <span>{status === "published" ? "Published" : "Draft"}</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Tags" name="tags" hint="Enter or comma adds a tag; suggestions come from your existing writeups. Technique tags power related-writeup recommendations." error={f.tags}>
         <TagInput key={tags.key} name="tags" defaultValue={tags.list} index={tagIndex} category={normalizeCategory(category)} />
