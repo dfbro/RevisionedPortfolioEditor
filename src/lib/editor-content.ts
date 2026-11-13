@@ -53,6 +53,7 @@ export type EditorProfile = {
   websiteUrl: string | null;
   githubUrl: string | null;
   githubActivityUsername?: string | null;
+  heroNameLines?: string[] | null;
   instagramUrl: string | null;
   profileImageUrl: string;
   aboutText: string;

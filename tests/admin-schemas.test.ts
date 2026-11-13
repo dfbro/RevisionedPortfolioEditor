@@ -75,6 +75,12 @@ describe("ProfileSchema", () => {
     expect(ProfileSchema.safeParse({ githubActivityUsername: "bad--login" }).success).toBe(false);
     expect(ProfileSchema.safeParse({ githubActivityUsername: "x".repeat(40) }).success).toBe(false);
   });
+  it("parses two or three hero name lines and requires the full display name in order", () => {
+    expect(ProfileSchema.parse({ displayName: "Elang Dimas Syadewa", heroNameLines: "Elang\nDimas Syadewa" }).heroNameLines).toEqual(["Elang", "Dimas Syadewa"]);
+    expect(ProfileSchema.parse({ displayName: "Elang Dimas Syadewa", heroNameLines: "Elang\nDimas\nSyadewa" }).heroNameLines).toEqual(["Elang", "Dimas", "Syadewa"]);
+    expect(ProfileSchema.safeParse({ displayName: "Elang Dimas Syadewa", heroNameLines: "Elang\nDimas Syad" }).success).toBe(false);
+    expect(ProfileSchema.safeParse({ displayName: "Elang Dimas Syadewa", heroNameLines: "Elang\nSyadewa\nDimas" }).success).toBe(false);
+  });
   it("keeps unknown SEO keys and accepts the real-length description", () => {
     const seo = { keywords: [], sameAs: [], siteName: "Elang", heroAnimatedTitles: ["CTF player"], description: "x".repeat(460) };
     const r = ProfileSchema.parse({ seo: JSON.stringify(seo) });

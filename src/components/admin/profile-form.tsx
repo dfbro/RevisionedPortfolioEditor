@@ -23,6 +23,7 @@ export type ProfileInitial = {
   websiteUrl: string;
   githubUrl: string;
   githubActivityUsername: string;
+  heroNameLines: string;
   instagramUrl: string;
   profileImageUrl: string;
   aboutText: string;
@@ -52,6 +53,9 @@ export function ProfileForm({ initial }: { initial: ProfileInitial }) {
       <div className="grid gap-6 md:grid-cols-2">
         {text("displayName", "Display name")}
         {text("alias", "Alias (also the footer glitch word)")}
+        <Field label="Hero name line groups" name="heroNameLines" hint="One visual line per row. Words stay intact and the full line groups must match Display name. Example: Elang / Dimas Syadewa, or use three rows for narrower layouts." error={f.heroNameLines}>
+          <Textarea id="heroNameLines" name="heroNameLines" rows={3} defaultValue={initial.heroNameLines} placeholder={"Elang\nDimas Syadewa"} />
+        </Field>
         <Field label="Navbar brand" name="navbarBrandMode" error={f.navbarBrandMode}>
           <select id="navbarBrandMode" name="navbarBrandMode" defaultValue={initial.navbarBrandMode} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
             <option value="default">Use alias</option>
