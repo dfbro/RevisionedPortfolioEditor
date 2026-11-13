@@ -43,7 +43,7 @@ export function WriteupForm({ initial = {}, tagIndex = [] }: { initial?: Writeup
   const [difficulty, setDifficulty] = useState(initial.difficulty ?? "");
   const [date, setDate] = useState(initial.date ?? "");
   const [flag, setFlag] = useState(initial.flag ?? "");
-  const [status, setStatus] = useState<"draft" | "published">(initial.status ?? "draft");
+  const [status, setStatus] = useState<string>(initial.status ?? "draft");
   const [uploading, setUploading] = useState(false);
   const [tags, setTags] = useState({ list: initial.tags ?? [], key: 0 });
   const [imported, setImported] = useState<{ html: string; nonce: number }>();
@@ -101,10 +101,11 @@ export function WriteupForm({ initial = {}, tagIndex = [] }: { initial?: Writeup
         <Textarea id="summary" name="summary" rows={2} value={summary} onChange={(e) => setSummary(e.target.value)} />
       </Field>
       <Field label="Publication status" name="status" hint="Published articles are included in the next static website build." error={f.status}>
-        <select id="status" name="status" value={status} onChange={(e) => setStatus(e.target.value as "draft" | "published")} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-        </select>
+        <Input id="status" name="status" list="publication-statuses" value={status} onChange={(e) => setStatus(e.target.value)} />
+        <datalist id="publication-statuses">
+          <option value="draft" />
+          <option value="published" />
+        </datalist>
       </Field>
       <Field label="Tags" name="tags" hint="Enter or comma adds a tag; suggestions come from your existing writeups. Technique tags power related-writeup recommendations." error={f.tags}>
         <TagInput key={tags.key} name="tags" defaultValue={tags.list} index={tagIndex} category={normalizeCategory(category)} />
