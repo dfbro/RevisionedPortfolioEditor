@@ -3,17 +3,35 @@
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TableKit } from "@tiptap/extension-table";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { EditorContent, NodeViewWrapper, ReactNodeViewRenderer, useEditor, useEditorState, type NodeViewProps } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { uploadFile } from "@/components/admin/image-field";
+import { editorAssetPreviewUrl } from "@/lib/asset-preview";
 import { cn } from "@/lib/utils";
 
 type Props = { name: string; defaultValue?: string; externalValue?: { html: string; nonce: number }; onUploadingChange?: (uploading: boolean) => void };
 
 const imagesIn = (files: FileList | null | undefined) => Array.from(files ?? []).filter((f) => f.type.startsWith("image/"));
+
+function EditorImagePreview({ node }: NodeViewProps) {
+  const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
+  return (
+    <NodeViewWrapper className="my-3">
+      {/* Keep the stored node URL canonical while resolving its editor-only image source locally. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={editorAssetPreviewUrl(src)} alt={typeof node.attrs.alt === "string" ? node.attrs.alt : ""} title={typeof node.attrs.title === "string" ? node.attrs.title : undefined} className="max-h-[32rem] max-w-full rounded-md border border-border object-contain" draggable={false} />
+    </NodeViewWrapper>
+  );
+}
+
+const PreviewImage = Image.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(EditorImagePreview);
+  },
+});
 
 /** Runs fn on the image node showing `src`, wherever edits since then have moved it. */
 function withImageNode(view: EditorView, src: string, fn: (pos: number, size: number, attrs: Record<string, unknown>) => void) {
@@ -56,7 +74,7 @@ export function RichEditor({ name, defaultValue = "", externalValue, onUploading
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({ link: { openOnClick: false, autolink: true }, heading: { levels: [2, 3, 4] } }),
-      Image,
+      PreviewImage,
       TableKit.configure({ table: { resizable: false } }),
       Placeholder.configure({ placeholder: "Explain the bug, the primitive, the exploit…" }),
     ],

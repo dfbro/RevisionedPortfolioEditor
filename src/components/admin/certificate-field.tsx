@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { editorAssetPreviewUrl } from "@/components/admin/image-field";
+import { editorAssetPreviewUrl, isPdfAssetUrl } from "@/lib/asset-preview";
 
 /** Certificate image or PDF. A PDF keeps the original (documentUrl) and shows its rendered page 1. */
 export function CertificateField({ defaultImage, defaultDocument }: { defaultImage?: string | null; defaultDocument?: string | null }) {
@@ -63,7 +63,7 @@ export function CertificateField({ defaultImage, defaultDocument }: { defaultIma
           </label>
         </Button>
       </div>
-      {doc && (
+      {doc && isPdfAssetUrl(doc) && (
         <div className="flex items-center gap-3 text-sm">
           <FileText className="h-4 w-4 text-primary" />
           <a href={editorAssetPreviewUrl(doc)} target="_blank" rel="noreferrer" className="truncate underline underline-offset-4">
