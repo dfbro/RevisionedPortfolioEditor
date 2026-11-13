@@ -95,6 +95,12 @@
   }
 }
 
+/* Keep datalist-backed inputs visually consistent with regular text inputs in Chromium. */
+input[list]::-webkit-calendar-picker-indicator,
+input[list]::-webkit-list-button {
+  display: none !important;
+}
+
 /* Lenis */
 html.lenis,
 html.lenis body {
