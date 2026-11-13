@@ -52,6 +52,7 @@ export type EditorProfile = {
   email: string | null;
   websiteUrl: string | null;
   githubUrl: string | null;
+  githubActivityUsername?: string | null;
   instagramUrl: string | null;
   profileImageUrl: string;
   aboutText: string;

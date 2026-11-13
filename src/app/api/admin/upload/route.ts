@@ -1,7 +1,18 @@
-import { requireAdminApi } from "@/lib/admin/guard";
-import { RepositoryError, writeAsset } from "@/lib/editor-repository";
+import { requireAdminApi, requireAdminReadApi } from "@/lib/admin/guard";
+import { listAssets, RepositoryError, writeAsset } from "@/lib/editor-repository";
 
 export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const denied = requireAdminReadApi(request);
+  if (denied) return denied;
+  try {
+    return Response.json({ items: await listAssets() }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    const status = error instanceof RepositoryError ? 400 : 500;
+    return Response.json({ error: error instanceof Error ? error.message : "Could not list assets" }, { status });
+  }
+}
 
 export async function POST(request: Request) {
   const denied = requireAdminApi(request);

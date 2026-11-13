@@ -22,6 +22,7 @@ export type ProfileInitial = {
   email: string;
   websiteUrl: string;
   githubUrl: string;
+  githubActivityUsername: string;
   instagramUrl: string;
   profileImageUrl: string;
   aboutText: string;
@@ -63,6 +64,9 @@ export function ProfileForm({ initial }: { initial: ProfileInitial }) {
         {text("githubUrl", "GitHub")}
         {text("instagramUrl", "Instagram")}
       </div>
+      <Field label="GitHub activity username" name="githubActivityUsername" hint="Used when the static website build snapshots the GitHub contribution heatmap. Leave blank to derive it from the GitHub profile URL." error={f.githubActivityUsername}>
+        <Input id="githubActivityUsername" name="githubActivityUsername" defaultValue={initial.githubActivityUsername} placeholder="e.g. Claritys11" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+      </Field>
       <Field label="Profile image" name="profileImageUrl" error={f.profileImageUrl}>
         <ImageField name="profileImageUrl" defaultValue={initial.profileImageUrl} />
       </Field>

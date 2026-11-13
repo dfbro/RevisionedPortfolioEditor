@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { uploadFile } from "@/components/admin/image-field";
+import { editorAssetPreviewUrl, uploadFile } from "@/components/admin/image-field";
 import { Button } from "@/components/ui/button";
 import type { Attachment } from "@/lib/types";
 
@@ -13,7 +13,7 @@ export function AttachmentsField({ name, defaultValue = [] }: { name: string; de
       <ul className="grid gap-1">
         {items.map((a, i) => (
           <li key={a.url} className="flex items-center justify-between gap-4 text-sm">
-            <a href={a.url} className="truncate font-mono text-xs">
+            <a href={editorAssetPreviewUrl(a.url)} target="_blank" rel="noreferrer" className="truncate font-mono text-xs">
               {a.name}
             </a>
             <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, j) => j !== i))}>

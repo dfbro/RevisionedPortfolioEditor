@@ -135,6 +135,10 @@ export const ProfileSchema = z.object({
   email: z.preprocess(blankToNull, z.email().nullable()),
   websiteUrl: linkUrl,
   githubUrl: linkUrl,
+  githubActivityUsername: z.preprocess(
+    blankToNull,
+    z.string().trim().max(39).regex(/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/, "Enter a valid GitHub username (up to 39 characters).").nullable(),
+  ),
   instagramUrl: linkUrl,
   profileImageUrl: mediaUrl,
   aboutText: optText(5000),

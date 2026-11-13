@@ -16,6 +16,12 @@ const ALLOWED_TYPES = new Set([
   "application/pdf", "text/plain", "application/zip",
   "video/mp4", "audio/mpeg",
 ]);
+const ASSET_CONTENT_TYPES: Record<string, string> = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+  ".webp": "image/webp", ".avif": "image/avif", ".pdf": "application/pdf",
+  ".txt": "text/plain", ".md": "text/plain", ".csv": "text/csv", ".zip": "application/zip",
+  ".mp4": "video/mp4", ".mp3": "audio/mpeg",
+};
 
 export class RepositoryError extends Error {
   constructor(message: string, public code = "REPOSITORY_ERROR") {
@@ -202,6 +208,34 @@ export async function writeRepoJson(relative: string, value: unknown, expectedHa
   await writeRepoText(relative, JSON.stringify(value, null, 2) + "\n", expectedHash);
 }
 
+async function publicAssetPrefix(): Promise<string> {
+  const site = await readRepoJson<{ url?: unknown; basePath?: unknown }>("content/site.json");
+  if (typeof site.url !== "string" || typeof site.basePath !== "string") {
+    throw new RepositoryError("The website site.json must define url and basePath before uploading assets.", "INVALID_SITE_CONFIG");
+  }
+  let origin: URL;
+  try {
+    origin = new URL(site.url);
+  } catch {
+    throw new RepositoryError("The website canonical URL is invalid.", "INVALID_SITE_CONFIG");
+  }
+  if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) {
+    throw new RepositoryError("The website canonical URL must be an HTTP(S) origin.", "INVALID_SITE_CONFIG");
+  }
+  const basePath = site.basePath;
+  if (basePath !== "/" && (!/^\/[A-Za-z0-9._~/-]+$/.test(basePath) || basePath.includes("//") || basePath.split("/").some((part) => part === ".." || part === "."))) {
+    throw new RepositoryError("The website basePath is invalid.", "INVALID_SITE_CONFIG");
+  }
+  const prefix = basePath === "/" ? "" : basePath.replace(/\/+$/, "");
+  return `${origin.origin}${prefix}/assets/uploads/`;
+}
+
+function assertAssetName(name: string): void {
+  if (!name || name === "." || name === ".." || name.length > 255 || name !== path.basename(name) || /[\\/\0]/.test(name)) {
+    throw new RepositoryError("Invalid asset name.", "INVALID_ASSET_NAME");
+  }
+}
+
 export async function deleteRepoFile(relative: string, expectedHash?: string | null): Promise<void> {
   const target = await repoPath(relative);
   if (expectedHash !== undefined) {
@@ -254,6 +288,7 @@ export async function writeAsset(file: File, options: { imagesOnly?: boolean } =
     throw new RepositoryError("Image signature does not match its declared file type.", "INVALID_ASSET_SIGNATURE");
   }
   const name = randomUUID() + "-" + safeAssetName(file.name);
+  const url = (await publicAssetPrefix()) + encodeURIComponent(name);
   const relative = "public/assets/uploads/" + name;
   const target = await repoPath(relative);
   await mkdir(path.dirname(target), { recursive: true });
@@ -265,7 +300,7 @@ export async function writeAsset(file: File, options: { imagesOnly?: boolean } =
     await rm(temporary, { force: true }).catch(() => undefined);
     throw error;
   }
-  return { name, url: "/assets/uploads/" + encodeURIComponent(name), contentType: type, size: buffer.length };
+  return { name, url, contentType: type, size: buffer.length };
 }
 
 export async function writeAssetBuffer(originalName: string, buffer: Buffer) {
@@ -285,6 +320,7 @@ export async function writeAssetBuffer(originalName: string, buffer: Buffer) {
     throw new RepositoryError("Imported assets must be valid PNG, JPEG, GIF, WebP or AVIF images.", "INVALID_ASSET_SIGNATURE");
   }
   const name = randomUUID() + "-" + safeAssetName(originalName);
+  const url = (await publicAssetPrefix()) + encodeURIComponent(name);
   const relative = "public/assets/uploads/" + name;
   const target = await repoPath(relative);
   await mkdir(path.dirname(target), { recursive: true });
@@ -296,34 +332,56 @@ export async function writeAssetBuffer(originalName: string, buffer: Buffer) {
     await rm(temporary, { force: true }).catch(() => undefined);
     throw error;
   }
-  const contentTypes: Record<string, string> = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".avif": "image/avif",
-  };
-  return { name, url: "/assets/uploads/" + encodeURIComponent(name), contentType: contentTypes[extension], size: buffer.length };
+  return { name, url, contentType: ASSET_CONTENT_TYPES[extension], size: buffer.length };
 }
 
 export async function listAssets() {
   const directory = await repoPath("public/assets/uploads");
   await mkdir(directory, { recursive: true });
-  const names = await readdir(directory);
+  const [names, publicPrefix] = await Promise.all([readdir(directory), publicAssetPrefix()]);
   const rows = await Promise.all(names.map(async (name) => {
-    const full = await repoPath("public/assets/uploads/" + name);
-    const info = await lstat(full);
-    if (!info.isFile() || info.isSymbolicLink()) return null;
+    const full = await repoPath("public/assets/uploads/" + name).catch(() => null);
+    if (!full) return null;
+    const info = await lstat(full).catch(() => null);
+    if (!info?.isFile() || info.isSymbolicLink()) return null;
     return {
       name,
       size: info.size,
       modified: info.mtime.toISOString(),
-      url: "/assets/uploads/" + encodeURIComponent(name),
+      contentType: ASSET_CONTENT_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream",
+      url: publicPrefix + encodeURIComponent(name),
+      previewUrl: "/api/admin/upload/" + encodeURIComponent(name),
     };
   }));
   return rows.filter((row): row is NonNullable<typeof row> => row !== null).sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
-export async function deleteAsset(name: string): Promise<void> {
-  if (!name || name !== path.basename(name) || /[\\/\0]/.test(name)) {
-    throw new RepositoryError("Invalid asset name.", "INVALID_ASSET_NAME");
+export async function readAsset(name: string): Promise<{ name: string; buffer: Buffer; contentType: string; size: number }> {
+  assertAssetName(name);
+  const full = await repoPath("public/assets/uploads/" + name);
+  let info;
+  try {
+    info = await lstat(full);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new RepositoryError("Asset not found.", "ASSET_NOT_FOUND");
+    }
+    throw error;
   }
+  if (!info.isFile() || info.isSymbolicLink()) {
+    throw new RepositoryError("Asset not found.", "ASSET_NOT_FOUND");
+  }
+  const buffer = await readFile(full);
+  return {
+    name,
+    buffer,
+    contentType: ASSET_CONTENT_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream",
+    size: buffer.length,
+  };
+}
+
+export async function deleteAsset(name: string): Promise<void> {
+  assertAssetName(name);
   const root = await repositoryRoot();
   const contentRoot = path.join(root, "content");
   const references: string[] = [];

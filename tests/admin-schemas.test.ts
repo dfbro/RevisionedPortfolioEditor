@@ -69,6 +69,12 @@ describe("ProfileSchema", () => {
     expect(ProfileSchema.safeParse({ technicalArsenal: '[{"name":"x","level":101}]' }).success).toBe(false);
     expect(ProfileSchema.safeParse({ navbarBrandMode: "weird" }).success).toBe(false);
   });
+  it("accepts an optional valid GitHub activity username and rejects malformed logins", () => {
+    expect(ProfileSchema.parse({ githubActivityUsername: "Claritys11" }).githubActivityUsername).toBe("Claritys11");
+    expect(ProfileSchema.parse({ githubActivityUsername: "" }).githubActivityUsername).toBeNull();
+    expect(ProfileSchema.safeParse({ githubActivityUsername: "bad--login" }).success).toBe(false);
+    expect(ProfileSchema.safeParse({ githubActivityUsername: "x".repeat(40) }).success).toBe(false);
+  });
   it("keeps unknown SEO keys and accepts the real-length description", () => {
     const seo = { keywords: [], sameAs: [], siteName: "Elang", heroAnimatedTitles: ["CTF player"], description: "x".repeat(460) };
     const r = ProfileSchema.parse({ seo: JSON.stringify(seo) });

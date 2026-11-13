@@ -65,7 +65,7 @@ To delete, use the row's Delete action and confirm. Deleting an article does not
 
 ## 5. Profile and appearance
 
-**Profile** edits display name, alias/brand, email, website/social links, profile image, biography, quote, skills, journey, education and SEO metadata. Array editors preserve the order shown.
+**Profile** edits display name, alias/brand, email, website/social links, profile image, biography, quote, skills, journey, education and SEO metadata. The separate **GitHub activity username** controls which public account the static build uses for the contribution heatmap; when left blank, the build derives the login from the GitHub profile URL. Array editors preserve the order shown.
 
 **Appearance & SEO** edits the canonical site URL, language, title/description, trailing-slash setting, default theme, typography, radius and light/dark color tokens.
 
@@ -73,7 +73,7 @@ The published project URL is currently `https://dfbro.github.io/RevisionedPortfo
 
 ## 6. Assets
 
-The Assets page writes uploads directly to `public/assets/uploads/`. Supported formats are checked by size, extension, MIME and file signature. Files are public after deployment.
+The Assets page writes uploads directly to `public/assets/uploads/`. Supported formats are checked by size, extension, MIME and file signature. Each row shows a local preview served by the Editor from the configured Portfolio checkout, while **Copy public URL** copies the canonical website URL (including the configured base path). The public URL is suitable for published content; the local preview URL is only for the loopback Editor and is not saved into content. Files are public after deployment.
 
 Do not delete an asset while an article, project, achievement or profile field still references it: the UI warns that existing references will break. Replace references first, save, then delete the old file.
 

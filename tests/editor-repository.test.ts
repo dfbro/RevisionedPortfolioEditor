@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { commitRepositoryChanges, deleteRepoFile, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, repositoryStatus, templateRepositoryStatus, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
+import { commitRepositoryChanges, deleteRepoFile, listAssets, readAsset, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, repositoryStatus, templateRepositoryStatus, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
 
 const execFile = promisify(nodeExecFile);
 
@@ -13,7 +13,9 @@ let temporaryRoot: string | undefined;
 async function makeRepo() {
   temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elaang-editor-test-"));
   await mkdir(path.join(temporaryRoot, ".git"));
+  await mkdir(path.join(temporaryRoot, "content"));
   await writeFile(path.join(temporaryRoot, "portfolio.repo.json"), JSON.stringify({ schemaVersion: 1, role: "production", instanceName: "Editor Test", templateName: "Portfolio Base", templateContractVersion: 1 }));
+  await writeFile(path.join(temporaryRoot, "content", "site.json"), JSON.stringify({ url: "https://portfolio.example", basePath: "/portfolio" }));
   vi.stubEnv("PORTFOLIO_REPO_PATH", temporaryRoot);
   return temporaryRoot;
 }
@@ -95,7 +97,7 @@ describe("repository filesystem boundary", () => {
     const outside = path.join(root, "outside");
     const managed = path.join(root, "content");
     await mkdir(outside);
-    await mkdir(managed);
+    await mkdir(managed, { recursive: true });
     await symlink(outside, path.join(managed, "escape"));
     await expect(repoPath("content/escape/secret.json")).rejects.toMatchObject({ code: "SYMLINK_REJECTED" });
   });
@@ -144,8 +146,19 @@ describe("repository filesystem boundary", () => {
     const pngHeader = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
     const png = new File([pngHeader], "pixel.png", { type: "image/png" });
     const stored = await writeAsset(png, { imagesOnly: true });
-    expect(stored.url).toMatch(/^\/assets\/uploads\//);
-    expect((await readFile(path.join(root, "public", stored.url.slice(1)))).subarray(0, 8)).toEqual(pngHeader);
+    expect(stored.url).toMatch(/^https:\/\/portfolio\.example\/portfolio\/assets\/uploads\//);
+    expect((await readFile(path.join(root, "public", "assets", "uploads", stored.name))).subarray(0, 8)).toEqual(pngHeader);
+    const asset = await readAsset(stored.name);
+    expect(asset).toMatchObject({ name: stored.name, contentType: "image/png", size: pngHeader.length });
+    expect(asset.buffer.subarray(0, 8)).toEqual(pngHeader);
+    await expect(readAsset("..")).rejects.toMatchObject({ code: "INVALID_ASSET_NAME" });
+    const [listed] = await listAssets();
+    expect(listed).toMatchObject({
+      name: stored.name,
+      url: stored.url,
+      previewUrl: `/api/admin/upload/${encodeURIComponent(stored.name)}`,
+      contentType: "image/png",
+    });
   });
 
   it("shows untracked content and binary assets in the repository diff preview", async () => {
