@@ -4,10 +4,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DELETE as deleteAssetRoute, GET as getAsset } from "@/app/api/admin/upload/[name]/route";
 import { GET as listAssetRoute, POST as uploadAssetRoute } from "@/app/api/admin/upload/route";
+import { GET as getPublicPreview } from "@/app/api/admin/public-preview/route";
 
 let temporaryRoot: string | undefined;
 
-async function makeRepo() {
+async function makeRepo(basePath = "/") {
   temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elaang-editor-assets-"));
   await mkdir(path.join(temporaryRoot, ".git"));
   await mkdir(path.join(temporaryRoot, "content"));
@@ -19,7 +20,7 @@ async function makeRepo() {
     templateName: "Portfolio Base",
     templateContractVersion: 1,
   }));
-  await writeFile(path.join(temporaryRoot, "content", "site.json"), JSON.stringify({ url: "https://portfolio.example", basePath: "/" }));
+  await writeFile(path.join(temporaryRoot, "content", "site.json"), JSON.stringify({ url: "https://portfolio.example", basePath }));
   vi.stubEnv("PORTFOLIO_REPO_PATH", temporaryRoot);
   return temporaryRoot;
 }
@@ -33,6 +34,35 @@ afterEach(async () => {
 });
 
 describe("asset preview API", () => {
+  it("previews a root-level public image such as the profile picture", async () => {
+    const root = await makeRepo();
+    const image = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00]);
+    await writeFile(path.join(root, "public", "profile.jpg"), image);
+
+    const response = await getPublicPreview(new Request("http://127.0.0.1:4317/api/admin/public-preview?path=%2Fprofile.jpg", { headers: localHeaders }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(image);
+  });
+
+  it("strips the configured GitHub Pages base path for public previews", async () => {
+    const root = await makeRepo("/portfolio");
+    const image = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x01]);
+    await writeFile(path.join(root, "public", "profile.jpg"), image);
+    const response = await getPublicPreview(new Request("http://127.0.0.1:4317/api/admin/public-preview?path=%2Fportfolio%2Fprofile.jpg", { headers: localHeaders }));
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(image);
+  });
+
+  it("rejects traversal and non-previewable public files", async () => {
+    await makeRepo();
+    const traversal = await getPublicPreview(new Request("http://127.0.0.1:4317/api/admin/public-preview?path=%2F..%2Fportfolio.repo.json", { headers: localHeaders }));
+    const unsupported = await getPublicPreview(new Request("http://127.0.0.1:4317/api/admin/public-preview?path=%2Frobots.txt", { headers: localHeaders }));
+    expect(traversal.status).toBe(400);
+    expect(unsupported.status).toBe(400);
+  });
+
   it("serves the exact asset bytes with a safe content type", async () => {
     const root = await makeRepo();
     const name = "a9e8dc62-e1e5-46a1-a6e6-9053dc763cb9-preview.png";

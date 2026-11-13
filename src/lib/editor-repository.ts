@@ -380,6 +380,61 @@ export async function readAsset(name: string): Promise<{ name: string; buffer: B
   };
 }
 
+/** Read a root-level image/PDF from the target site's public folder for local editor previews. */
+export async function readPublicPreviewAsset(requestedPath: string): Promise<{ name: string; buffer: Buffer; contentType: string; size: number }> {
+  if (!requestedPath.startsWith("/") || requestedPath.includes("\\") || requestedPath.includes("\0")) {
+    throw new RepositoryError("Invalid public preview path.", "INVALID_PUBLIC_PREVIEW_PATH");
+  }
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(requestedPath);
+  } catch {
+    throw new RepositoryError("Invalid public preview path encoding.", "INVALID_PUBLIC_PREVIEW_PATH");
+  }
+
+  const site = await readRepoJson<{ basePath?: unknown }>("content/site.json");
+  if (typeof site.basePath !== "string") throw new RepositoryError("Website basePath is invalid.", "INVALID_SITE_CONFIG");
+  const basePath = site.basePath === "/" ? "" : site.basePath.replace(/\/+$/, "");
+  if (basePath && (pathname === basePath || pathname.startsWith(basePath + "/"))) pathname = pathname.slice(basePath.length) || "/";
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === ".." || /[\\\0]/.test(part))) {
+    throw new RepositoryError("Invalid public preview path.", "INVALID_PUBLIC_PREVIEW_PATH");
+  }
+  const name = parts.at(-1)!;
+  assertAssetName(name);
+  const contentType = ASSET_CONTENT_TYPES[path.extname(name).toLowerCase()];
+  if (!contentType?.startsWith("image/") && contentType !== "application/pdf") {
+    throw new RepositoryError("Only image and PDF files can be previewed.", "INVALID_PUBLIC_PREVIEW_TYPE");
+  }
+
+  const root = await repositoryRoot();
+  const publicRoot = path.join(root, "public");
+  const full = path.resolve(publicRoot, ...parts);
+  if (full !== publicRoot && !full.startsWith(publicRoot + path.sep)) throw new RepositoryError("Public preview path escapes the public directory.", "INVALID_PUBLIC_PREVIEW_PATH");
+  const publicStat = await lstat(publicRoot);
+  if (!publicStat.isDirectory() || publicStat.isSymbolicLink()) throw new RepositoryError("Public preview directory is unavailable.", "PUBLIC_PREVIEW_NOT_FOUND");
+  let current = publicRoot;
+  let info;
+  for (const [index, part] of parts.entries()) {
+    current = path.join(current, part);
+    try {
+      info = await lstat(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new RepositoryError("Public preview asset not found.", "ASSET_NOT_FOUND");
+      throw error;
+    }
+    if (info.isSymbolicLink() || (index < parts.length - 1 && !info.isDirectory())) {
+      throw new RepositoryError("Public preview asset not found.", "PUBLIC_PREVIEW_NOT_FOUND");
+    }
+  }
+  if (!info!.isFile() || info!.isSymbolicLink() || info!.size > MAX_ASSET_BYTES) {
+    throw new RepositoryError("Public preview asset not found or exceeds the preview limit.", "PUBLIC_PREVIEW_NOT_FOUND");
+  }
+  const buffer = await readFile(full);
+  return { name, buffer, contentType, size: buffer.length };
+}
+
 export async function deleteAsset(name: string): Promise<void> {
   assertAssetName(name);
   const root = await repositoryRoot();

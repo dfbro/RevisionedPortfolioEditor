@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { DeleteButton } from "@/components/admin/delete-button";
+import { editorAssetPreviewUrl } from "@/lib/asset-preview";
 import { Button } from "@/components/ui/button";
 import { deleteAchievement, resetAchievementOrder, saveAchievementOrder } from "@/lib/admin/actions/achievements";
 
@@ -26,7 +27,7 @@ function Item({ row, index, expectedHash }: { row: Row; index: number; expectedH
       <span className="w-6 text-right font-mono text-xs text-muted-foreground">{index + 1}</span>
       {row.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={row.imageUrl} alt="" className="h-9 w-12 rounded-sm border border-border object-cover" draggable={false} />
+        <img src={editorAssetPreviewUrl(row.imageUrl)} alt="" className="h-9 w-12 rounded-sm border border-border object-cover" draggable={false} />
       ) : (
         <span className="h-9 w-12 rounded-sm bg-muted" />
       )}

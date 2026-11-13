@@ -4,23 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-/** Preview an uncommitted website asset through the local editor backend. */
-export function editorAssetPreviewUrl(value: string): string {
-  try {
-    const pathname = new URL(value, "http://127.0.0.1:4317").pathname;
-    const marker = "/assets/uploads/";
-    const index = pathname.lastIndexOf(marker);
-    if (index < 0) return value;
-    const encodedName = pathname.slice(index + marker.length);
-    if (!encodedName || encodedName.includes("/")) return value;
-    const name = decodeURIComponent(encodedName);
-    if (!name || name === "." || name === ".." || /[\\/\0]/.test(name)) return value;
-    return "/api/admin/upload/" + encodeURIComponent(name);
-  } catch {
-    return value;
-  }
-}
+import { editorAssetPreviewUrl } from "@/lib/asset-preview";
 
 export async function uploadFile(file: File): Promise<{ url: string; name: string; contentType: string }> {
   const fd = new FormData();

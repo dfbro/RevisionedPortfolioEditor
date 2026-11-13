@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { editorAssetPreviewUrl, uploadFile } from "@/components/admin/image-field";
+import { uploadFile } from "@/components/admin/image-field";
+import { editorAssetPreviewUrl } from "@/lib/asset-preview";
 import { Button } from "@/components/ui/button";
 import type { Attachment } from "@/lib/types";
 
@@ -13,9 +14,15 @@ export function AttachmentsField({ name, defaultValue = [] }: { name: string; de
       <ul className="grid gap-1">
         {items.map((a, i) => (
           <li key={a.url} className="flex items-center justify-between gap-4 text-sm">
-            <a href={editorAssetPreviewUrl(a.url)} target="_blank" rel="noreferrer" className="truncate font-mono text-xs">
-              {a.name}
-            </a>
+            <div className="flex min-w-0 items-center gap-3">
+              {a.contentType.startsWith("image/") && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={editorAssetPreviewUrl(a.url)} alt="" loading="lazy" className="h-10 w-14 shrink-0 rounded border border-border object-cover" />
+              )}
+              <a href={editorAssetPreviewUrl(a.url)} target="_blank" rel="noreferrer" className="truncate font-mono text-xs">
+                {a.name}
+              </a>
+            </div>
             <Button type="button" variant="ghost" size="sm" onClick={() => setItems(items.filter((_, j) => j !== i))}>
               remove
             </Button>
