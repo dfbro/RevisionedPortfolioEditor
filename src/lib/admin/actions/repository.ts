@@ -1,6 +1,6 @@
 "use server";
 
-import { commitRepositoryChanges, pushRepositoryChanges, repositoryDiff, repositoryHealth, repositoryStatus } from "@/lib/editor-repository";
+import { commitRepositoryChanges, fetchPortfolioRemote, pushRepositoryChanges, repositoryDiff, repositoryHealth, repositoryStatus } from "@/lib/editor-repository";
 
 export async function inspectRepositoryAction() {
   try {
@@ -37,6 +37,14 @@ export async function commitRepositoryAction(subject: string) {
 export async function pushRepositoryAction() {
   try {
     return { ok: true as const, output: await pushRepositoryChanges() };
+  } catch (error) {
+    return { ok: false as const, error: (error as Error).message };
+  }
+}
+
+export async function fetchRepositoryRemoteAction() {
+  try {
+    return { ok: true as const, data: await fetchPortfolioRemote() };
   } catch (error) {
     return { ok: false as const, error: (error as Error).message };
   }

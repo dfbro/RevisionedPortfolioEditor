@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/admin/field";
 import {
   commitRepositoryAction,
+  fetchRepositoryRemoteAction,
   getRepositoryDiffAction,
   inspectRepositoryAction,
   pushRepositoryAction,
@@ -28,9 +30,11 @@ type TemplateStatus =
   | { ok: true; root: string; branch: string; remote: string; status: string; templateName: string; templateVersion: string; contractVersion: number }
   | { ok: false; error: string };
 
-export function RepositoryPanel({ initial, template }: { initial: { root: string; remote: string; branch: string; status: string; diffStat: string; diffCheck: { ok: boolean; output: string }; instanceName: string; templateName: string; templateContractVersion: number }; template: TemplateStatus }) {
+export function RepositoryPanel({ initial, template }: { initial: { root: string; remote: string; branch: string; status: string; diffStat: string; diffCheck: { ok: boolean; output: string }; upstream: string | null; ahead: number; behind: number; instanceName: string; templateName: string; templateContractVersion: number }; template: TemplateStatus }) {
+  const router = useRouter();
   const [health, setHealth] = useState<HealthData | null>(null);
   const [diff, setDiff] = useState<{ stat: string; patch: string } | null>(null);
+  const [syncMessage, setSyncMessage] = useState("");
   const [message, setMessage] = useState("content: update portfolio");
   const [busy, start] = useTransition();
 
@@ -65,6 +69,20 @@ export function RepositoryPanel({ initial, template }: { initial: { root: string
       const result = await pushRepositoryAction();
       if (result.ok) toast.success("Pushed to origin.");
       else toast.error(result.error);
+    });
+  }
+
+  async function fetchRemote() {
+    start(async () => {
+      const result = await fetchRepositoryRemoteAction();
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setSyncMessage(result.data.message);
+      if (result.data.outcome === "updated" || result.data.outcome === "up-to-date") toast.success(result.data.message);
+      else toast.warning(result.data.message);
+      router.refresh();
     });
   }
 
@@ -108,9 +126,16 @@ export function RepositoryPanel({ initial, template }: { initial: { root: string
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="meta">working tree</h2>
           <div className="flex gap-2">
+            <Button type="button" size="sm" disabled={busy} onClick={fetchRemote}>Fetch remote</Button>
             <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={showDiff}>Show diff</Button>
             <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={inspect}>Run health check</Button>
           </div>
+        </div>
+        <div className="rounded-md border border-border p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Remote tracking</p>
+          <p className="mt-1 break-all">{initial.upstream ?? "No upstream branch configured"} · {initial.ahead} ahead · {initial.behind} behind</p>
+          <p className="mt-2">Automatic fetch runs when the Editor server boots. Fetch remote checks origin now and fast-forwards only when the working tree is clean and the branch has not diverged.</p>
+          {syncMessage && <p className="mt-2 text-foreground">Last manual fetch: {syncMessage}</p>}
         </div>
         <pre className="max-h-64 overflow-auto rounded-md border border-border p-3 font-mono text-xs">{initial.status || "Clean working tree"}</pre>
         <p className="text-xs text-muted-foreground">{initial.diffStat || "No unstaged diff."}</p>

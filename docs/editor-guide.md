@@ -31,7 +31,7 @@ For non-default paths, copy `.env.example` to `.env.local` and set `PORTFOLIO_RE
 | Migration tools | Read-only adapter plan; no active importer |
 | Repository health | Root/remote checks, template compatibility, diff, doctor, commit and push |
 
-Use **Refresh repository data** in the sidebar after editing files outside the editor. There is no persistent CMS database or guaranteed filesystem watcher.
+Use **Refresh repository data** in the sidebar after editing files outside the editor. This refreshes the current local view; it does not contact GitHub. The Editor server also fetches its configured `origin` once at startup. For an immediate cross-device sync, use **Fetch remote** in Repository health. There is no persistent CMS database or guaranteed filesystem watcher.
 
 ## 3. Writeups: create, edit, publish, delete
 
@@ -87,10 +87,22 @@ Save writes directly into the production working tree. It does **not**:
 
 Forms carry a SHA-256 snapshot. If another process changes the same source file after the form was opened, the editor rejects the stale save with an edit-conflict error. Refresh repository data and reopen the item; do not try to overwrite the newer content blindly.
 
-## 8. Migration tools
+## 8. Sync across devices
+
+Each device must have its own clone of the same production repository and use the same branch/upstream. Configure `PORTFOLIO_REPO_PATH` and `EXPECTED_PORTFOLIO_REMOTE` in that device's `.env.local`; the expected remote must match the configured production repo's `origin`.
+
+- On Editor server boot, it fetches `origin` and fast-forwards the current branch only when the working tree is clean and it is strictly behind its `origin/*` upstream.
+- In **Repository health**, select **Fetch remote** to run the same check while the Editor is open.
+- If there are uncommitted changes, the remote refs are fetched but local files are not changed. Save/commit or otherwise reconcile the local work, then fetch again.
+- If local and remote commits have diverged, the Editor reports the mismatch and does not rebase, merge, reset or overwrite either side. Reconcile the branch manually in Git.
+- Fetch never pushes. Review and use the separate Commit and Push actions to publish changes.
+
+Set `EDITOR_AUTO_FETCH=false` to disable startup fetch on a device. The manual **Fetch remote** action remains available.
+
+## 9. Migration tools
 
 The **Migration tools** page is currently a read-only workbench. It documents PostgreSQL/Prisma, public snapshot and Markdown/JSON adapter options and the required dry-run/staging pipeline. It has no file picker or import action yet. See [Migration runbook](migration-runbook.md) before handling a legacy export.
 
-## 9. Finish the publishing cycle
+## 10. Finish the publishing cycle
 
 After saving, follow [Git and publish](git-and-publish.md). Do not stop at Save if you expect the public site to change.

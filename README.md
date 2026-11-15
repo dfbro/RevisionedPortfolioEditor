@@ -37,7 +37,7 @@ A template manifest with `role: template` is rejected as a write target. Do not 
 - Central site deployment settings: canonical origin, base path (`/` by default), fixed static output `dist`, trailing-slash policy, and metadata.
 - Explicit GitHub Pages custom-domain synchronization with a browser confirmation; existing workflow publishing mode/source are preserved.
 - Public asset manager.
-- Production Git status, managed-path diff, validation, explicit commit and guarded push.
+- Production Git status, managed-path diff, validation, startup remote fetch, manual fetch, explicit commit and guarded push.
 - Template identity and content contract compatibility check.
 - Migration Tools workbench with the legacy schema map and future adapter pipeline.
 
@@ -56,6 +56,7 @@ See [docs/migration-runbook.md](docs/migration-runbook.md) and [docs/migration-a
 - Commit runs content validation and Git diff checks first.
 - Commit stages only `content/` and `public/assets/`.
 - Push verifies `origin` against `EXPECTED_PORTFOLIO_REMOTE`.
+- Startup/manual fetch only fast-forwards a clean branch tracking `origin/*`; dirty or diverged branches are left untouched.
 - Diagnostics never reset, clean, rebase or repair Git state.
 
 The source production repository remains the only source of content truth. The public static site is built from that repository's `dist/` artifact; there is no separate active `RevisionedPortfolioSite` Git repository. The editor's GitHub Pages action changes only the repository custom-domain setting. DNS records and TLS activation are separate infrastructure operations. Template files are not synchronized automatically, and migration imports require a future dry-run/approval workflow before production writes.

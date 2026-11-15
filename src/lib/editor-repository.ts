@@ -472,15 +472,111 @@ async function git(args: string[], timeout = 15_000): Promise<string> {
   }
 }
 
+export type RemoteFetchOutcome =
+  | "updated"
+  | "up-to-date"
+  | "local-changes"
+  | "local-ahead"
+  | "diverged"
+  | "no-upstream"
+  | "other-upstream";
+
+export type RemoteFetchResult = {
+  outcome: RemoteFetchOutcome;
+  branch: string;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  message: string;
+};
+
+let remoteFetchInFlight: Promise<RemoteFetchResult> | null = null;
+
+function normalizeRemote(remote: string): string {
+  return remote.replace(/\.git$/, "").replace(/\/$/, "").toLowerCase();
+}
+
+async function performRemoteFetch(): Promise<RemoteFetchResult> {
+  const root = await repositoryRoot();
+  const [remote, branch] = await Promise.all([
+    git(["remote", "get-url", "origin"]),
+    git(["branch", "--show-current"]),
+  ]);
+  const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/dfbro/RevisionedPortfolio";
+  if (normalizeRemote(remote) !== normalizeRemote(expectedRemote)) {
+    throw new RepositoryError("Fetch blocked: origin does not match the configured portfolio repository.", "REMOTE_MISMATCH");
+  }
+  if (!branch) throw new RepositoryError("Fetch blocked: checkout is in detached HEAD state.", "DETACHED_HEAD");
+
+  try {
+    await execFile("git", ["fetch", "--no-tags", "origin"], { cwd: root, timeout: 60_000, maxBuffer: 5 * 1024 * 1024, windowsHide: true });
+  } catch (error) {
+    const e = error as NodeJS.ErrnoException & { stderr?: string };
+    throw new RepositoryError(e.stderr?.trim() || e.message || "Git fetch failed.", "GIT_FETCH_FAILED");
+  }
+
+  const upstream = await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).catch(() => "");
+  if (!upstream) {
+    return { outcome: "no-upstream", branch, upstream: null, ahead: 0, behind: 0, message: `Fetched origin, but ${branch} has no configured upstream branch.` };
+  }
+  if (!upstream.startsWith("origin/")) {
+    return { outcome: "other-upstream", branch, upstream, ahead: 0, behind: 0, message: `Fetched origin, but ${branch} tracks ${upstream}; automatic integration is limited to origin/* branches.` };
+  }
+
+  const workingTree = await git(["status", "--porcelain", "--untracked-files=all"]);
+  const counts = await git(["rev-list", "--left-right", "--count", `HEAD...${upstream}`]);
+  const [aheadText, behindText] = counts.split(/\s+/);
+  const ahead = Number(aheadText);
+  const behind = Number(behindText);
+  if (!Number.isInteger(ahead) || !Number.isInteger(behind)) {
+    throw new RepositoryError("Could not determine how the local branch compares with its upstream.", "INVALID_TRACKING_STATUS");
+  }
+
+  if (workingTree) {
+    return { outcome: "local-changes", branch, upstream, ahead, behind, message: `Fetched ${upstream}, but left the working tree untouched because it has uncommitted changes. Commit or otherwise resolve them, then fetch again.` };
+  }
+  if (ahead > 0 && behind > 0) {
+    return { outcome: "diverged", branch, upstream, ahead, behind, message: `Fetched ${upstream}, but local and remote history diverged (${ahead} local, ${behind} remote commits). Reconcile manually; no rebase or reset was attempted.` };
+  }
+  if (ahead > 0) {
+    return { outcome: "local-ahead", branch, upstream, ahead, behind, message: `Fetched ${upstream}. The local branch is ${ahead} commit(s) ahead; no local commits were changed.` };
+  }
+  if (behind > 0) {
+    try {
+      await execFile("git", ["merge", "--ff-only", upstream], { cwd: root, timeout: 60_000, maxBuffer: 5 * 1024 * 1024, windowsHide: true });
+    } catch (error) {
+      const e = error as NodeJS.ErrnoException & { stderr?: string };
+      throw new RepositoryError(e.stderr?.trim() || e.message || "Fast-forward integration failed.", "FAST_FORWARD_FAILED");
+    }
+    return { outcome: "updated", branch, upstream, ahead: 0, behind: 0, message: `Fast-forwarded ${branch} to ${upstream} (${behind} commit(s)).` };
+  }
+  return { outcome: "up-to-date", branch, upstream, ahead, behind, message: `${branch} is up to date with ${upstream}.` };
+}
+
+/** Fetch origin and integrate only a clean, fast-forwardable upstream. Never discards local work. */
+export async function fetchPortfolioRemote(): Promise<RemoteFetchResult> {
+  if (remoteFetchInFlight) return remoteFetchInFlight;
+  const operation = performRemoteFetch();
+  remoteFetchInFlight = operation;
+  try {
+    return await operation;
+  } finally {
+    if (remoteFetchInFlight === operation) remoteFetchInFlight = null;
+  }
+}
+
 export async function repositoryStatus() {
-  const [root, remote, branch, status, diffStat, diffCheck] = await Promise.all([
+  const [root, remote, branch, status, diffStat, diffCheck, upstream] = await Promise.all([
     git(["rev-parse", "--show-toplevel"]),
     git(["remote", "get-url", "origin"]).catch(() => ""),
     git(["branch", "--show-current"]),
     git(["status", "--short", "--branch"]),
     git(["diff", "--stat"]),
     git(["diff", "--check"]).then(() => ({ ok: true, output: "" })).catch((e: Error) => ({ ok: false, output: e.message })),
+    git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).catch(() => ""),
   ]);
+  const tracking = upstream ? await git(["rev-list", "--left-right", "--count", `HEAD...${upstream}`]).catch(() => "") : "";
+  const [aheadText, behindText] = tracking ? tracking.split(/\s+/) : ["0", "0"];
   const manifest = await readProductionManifest(root);
   return {
     root,
@@ -491,6 +587,9 @@ export async function repositoryStatus() {
     status,
     diffStat,
     diffCheck,
+    upstream: upstream || null,
+    ahead: Number(aheadText) || 0,
+    behind: Number(behindText) || 0,
     instanceName: manifest.instanceName,
     templateName: manifest.templateName,
     templateContractVersion: manifest.templateContractVersion,
@@ -530,7 +629,6 @@ export async function repositoryHealth() {
     const e = error as NodeJS.ErrnoException & { stderr?: string; stdout?: string };
     staticOutput = { ok: false, output: [e.stdout, e.stderr, e.message].filter(Boolean).join("\n") };
   }
-  const normalizeRemote = (value: string) => value.replace(/\.git$/, "").replace(/\/$/, "").toLowerCase();
   return { ...status, fsck, content, staticOutput, remoteConnectivity, expectedRemote, remoteMatches: normalizeRemote(status.remote) === normalizeRemote(expectedRemote) };
 }
 
@@ -608,7 +706,6 @@ export async function pushRepositoryChanges() {
     git(["branch", "--show-current"]),
   ]);
   const expectedRemote = process.env.EXPECTED_PORTFOLIO_REMOTE || "https://github.com/dfbro/RevisionedPortfolio";
-  const normalizeRemote = (value: string) => value.replace(/\.git$/, "").replace(/\/$/, "").toLowerCase();
   if (normalizeRemote(remote) !== normalizeRemote(expectedRemote)) {
     throw new RepositoryError("Push blocked: origin does not match the configured portfolio repository.", "REMOTE_MISMATCH");
   }

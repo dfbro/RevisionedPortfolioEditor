@@ -4,11 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { commitRepositoryChanges, deleteRepoFile, listAssets, readAsset, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, repositoryStatus, templateRepositoryStatus, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
+import { commitRepositoryChanges, deleteRepoFile, fetchPortfolioRemote, listAssets, readAsset, readRepoSnapshot, repoPath, repositoryDiff, repositoryRoot, repositoryStatus, templateRepositoryStatus, pushRepositoryChanges, writeAsset, writeRepoJson, writeRepoText } from "@/lib/editor-repository";
 
 const execFile = promisify(nodeExecFile);
 
 let temporaryRoot: string | undefined;
+let temporaryRemoteRoot: string | undefined;
 
 async function makeRepo() {
   temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "elaang-editor-test-"));
@@ -24,10 +25,34 @@ async function git(root: string, args: string[]) {
   await execFile("git", args, { cwd: root, windowsHide: true });
 }
 
+async function makeRemotePair() {
+  const root = await makeRepo();
+  await git(root, ["init", "-b", "main"]);
+  await git(root, ["config", "user.name", "Editor Test"]);
+  await git(root, ["config", "user.email", "editor-test@example.test"]);
+  await git(root, ["add", "--all"]);
+  await git(root, ["commit", "-m", "initial"]);
+
+  temporaryRemoteRoot = await mkdtemp(path.join(os.tmpdir(), "elaang-editor-remote-"));
+  const remote = path.join(temporaryRemoteRoot, "origin.git");
+  await execFile("git", ["init", "--bare", "--initial-branch=main", remote], { cwd: root, windowsHide: true });
+  await git(root, ["remote", "add", "origin", remote]);
+  await git(root, ["push", "--set-upstream", "origin", "main"]);
+
+  const peer = path.join(temporaryRemoteRoot, "peer");
+  await execFile("git", ["clone", remote, peer], { cwd: root, windowsHide: true });
+  await git(peer, ["config", "user.name", "Remote Editor"]);
+  await git(peer, ["config", "user.email", "remote-editor@example.test"]);
+  vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", remote);
+  return { root, remote, peer };
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
+  if (temporaryRemoteRoot) await rm(temporaryRemoteRoot, { recursive: true, force: true });
   temporaryRoot = undefined;
+  temporaryRemoteRoot = undefined;
 });
 
 describe("repository filesystem boundary", () => {
@@ -223,5 +248,56 @@ describe("repository filesystem boundary", () => {
     vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/dfbro/RevisionedPortfolio");
 
     await expect(pushRepositoryChanges()).rejects.toMatchObject({ code: "REMOTE_MISMATCH" });
+  });
+
+  it("fetches and fast-forwards a clean branch after another device pushes", async () => {
+    const { root, peer } = await makeRemotePair();
+    await writeFile(path.join(peer, "content", "remote-update.md"), "from another device\n");
+    await git(peer, ["add", "--all"]);
+    await git(peer, ["commit", "-m", "remote update"]);
+    await git(peer, ["push"]);
+
+    const result = await fetchPortfolioRemote();
+    expect(result).toMatchObject({ outcome: "updated", branch: "main", upstream: "origin/main", ahead: 0, behind: 0 });
+    expect(result.message).toContain("Fast-forwarded");
+    expect(await readFile(path.join(root, "content", "remote-update.md"), "utf8")).toBe("from another device\n");
+  });
+
+  it("fetches remote refs but leaves a dirty working tree untouched", async () => {
+    const { root, peer } = await makeRemotePair();
+    await writeFile(path.join(root, "content", "site.json"), "local uncommitted edit\n");
+    await writeFile(path.join(peer, "content", "remote-update.md"), "remote commit\n");
+    await git(peer, ["add", "--all"]);
+    await git(peer, ["commit", "-m", "remote update"]);
+    await git(peer, ["push"]);
+
+    const result = await fetchPortfolioRemote();
+    expect(result).toMatchObject({ outcome: "local-changes", branch: "main", upstream: "origin/main", ahead: 0, behind: 1 });
+    expect(await readFile(path.join(root, "content", "site.json"), "utf8")).toBe("local uncommitted edit\n");
+    await expect(readFile(path.join(root, "content", "remote-update.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("reports diverged history without rewriting either side", async () => {
+    const { root, peer } = await makeRemotePair();
+    await writeFile(path.join(root, "content", "local-only.md"), "local commit\n");
+    await git(root, ["add", "--all"]);
+    await git(root, ["commit", "-m", "local update"]);
+    await writeFile(path.join(peer, "content", "remote-only.md"), "remote commit\n");
+    await git(peer, ["add", "--all"]);
+    await git(peer, ["commit", "-m", "remote update"]);
+    await git(peer, ["push"]);
+
+    const result = await fetchPortfolioRemote();
+    expect(result).toMatchObject({ outcome: "diverged", branch: "main", upstream: "origin/main", ahead: 1, behind: 1 });
+    expect(await readFile(path.join(root, "content", "local-only.md"), "utf8")).toBe("local commit\n");
+    await expect(readFile(path.join(root, "content", "remote-only.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(execFile("git", ["log", "-1", "--format=%s"], { cwd: root })).resolves.toMatchObject({ stdout: "local update\n" });
+  });
+
+  it("blocks fetches from an unexpected origin", async () => {
+    const { root } = await makeRemotePair();
+    vi.stubEnv("EXPECTED_PORTFOLIO_REMOTE", "https://github.com/example/unexpected");
+    await expect(fetchPortfolioRemote()).rejects.toMatchObject({ code: "REMOTE_MISMATCH" });
+    expect(await readFile(path.join(root, "content", "site.json"), "utf8")).toContain("https://portfolio.example");
   });
 });

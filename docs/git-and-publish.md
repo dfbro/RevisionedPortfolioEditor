@@ -6,12 +6,13 @@
 | --- | --- | --- |
 | Save | Editor form action | Changes files in the local production checkout |
 | Commit | Repository health action | Creates a local Git commit |
+| Fetch | Editor startup or Repository health action | Fetches `origin`; fast-forwards only a clean branch that is behind its `origin/*` upstream |
 | Push | Repository health action | Sends existing local commits to `origin` |
 | Build | GitHub Actions in `RevisionedPortfolio` | Runs validation and creates the `out/` static export |
 | Publish | Publish job in the same workflow | Transfers `out/` to `RevisionedPortfolioSite` using a dedicated cross-repository token |
 | Pages | Branch publishing in `RevisionedPortfolioSite` | Serves `main` → `/(root)` |
 
-The editor never combines these steps automatically.
+The editor never commits or pushes automatically. Startup fetch is enabled by default; it does not overwrite dirty or diverged work.
 
 ## 2. Check repository identity first
 
@@ -34,6 +35,19 @@ The template is read-only. Commit and Push buttons target only the production re
 6. Check asset paths and ensure no accidental files or secrets are being published.
 
 If you changed website source code, workflow files or docs directly in the production repository, review those changes in a terminal. The editor's managed commit is intentionally limited to `content/` and `public/assets/`.
+
+## 3a. Fetch from another device
+
+The Next.js Node server fetches `origin` once when it boots. To check for changes without restarting, open **Repository health** and select **Fetch remote**. Both paths use the same guarded behavior:
+
+- `origin` must match `EXPECTED_PORTFOLIO_REMOTE`;
+- the current branch must have an upstream under `origin/*`;
+- a clean branch behind its upstream is updated with `git merge --ff-only`;
+- uncommitted changes, local-only commits or diverged history are reported without rewriting local files or commits.
+
+For more than one editing device, give each device a separate clone of the production repository, use the same branch/upstream, and fetch before starting a new editing session. Commit and Push remain explicit. If a device reports divergence, reconcile it manually in Git before continuing; do not use reset to force one device over another.
+
+Set `EDITOR_AUTO_FETCH=false` in `.env.local` to disable the startup fetch. The manual action remains enabled.
 
 ## 4. Run repository health
 
